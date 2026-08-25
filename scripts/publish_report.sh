@@ -10,8 +10,8 @@ git switch main -q
 git branch gh-pages 2>/dev/null || true
 
 rm -rf .gh-pages-tmp
-git worktree prune -q || true
-git worktree add .gh-pages-tmp gh-pages
+git worktree prune || true
+git worktree add -f .gh-pages-tmp gh-pages
 
 cd .gh-pages-tmp
 git pull origin gh-pages -q || true
