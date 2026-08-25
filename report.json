@@ -1,0 +1,420 @@
+{
+  "goal": "对被测待办清单系统执行 API + Web UI 自动化测试，发现缺陷并生成报告",
+  "started_at": "2026-08-25 22:23:20",
+  "finished_at": "2026-08-25 22:23:28",
+  "brain_name": "mock",
+  "llm_configured": false,
+  "base_url": "http://127.0.0.1:5001",
+  "summary": {
+    "total": 18,
+    "passed": 16,
+    "failed": 2,
+    "defects": 2
+  },
+  "cases": [
+    {
+      "case_id": "API-001",
+      "title": "健康检查应返回 200",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'status': 'ok', 'time': '2026-08-25T14:23:20.197353+00:00', 'version': '1.0.0'}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /api/health -> 200，响应体: {'status': 'ok', 'time': '2026-08-25T14:23:20.197353+00:00', 'version': '1.0.0'}",
+      "duration_ms": 22,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 22ms"
+      ]
+    },
+    {
+      "case_id": "API-002",
+      "title": "正确凭据登录应返回 200 和 token",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'token': 'demo-token-123', 'user': 'admin'}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 POST /api/login -> 200，响应体: {'token': 'demo-token-123', 'user': 'admin'}",
+      "duration_ms": 4,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 4ms"
+      ]
+    },
+    {
+      "case_id": "API-003",
+      "title": "错误密码登录应返回 401",
+      "kind": "api",
+      "ok": true,
+      "expected": "401",
+      "actual": "401 {'error': 'invalid credentials'}",
+      "actual_status": 401,
+      "error": "",
+      "evidence": "请求 POST /api/login -> 401，响应体: {'error': 'invalid credentials'}",
+      "duration_ms": 3,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 3ms"
+      ]
+    },
+    {
+      "case_id": "API-004",
+      "title": "缺参数登录应返回 400",
+      "kind": "api",
+      "ok": true,
+      "expected": "400",
+      "actual": "400 {'error': 'username and password are required'}",
+      "actual_status": 400,
+      "error": "",
+      "evidence": "请求 POST /api/login -> 400，响应体: {'error': 'username and password are required'}",
+      "duration_ms": 4,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 4ms"
+      ]
+    },
+    {
+      "case_id": "API-005",
+      "title": "查询待办列表应返回 200",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'count': 2, 'data': [{'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}, {'created_at': '2026-08-25T14:23:20.121364+00:00",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /api/todos -> 200，响应体: {'count': 2, 'data': [{'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}, {'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 2, 'priority': 'medium', 'status': 'done', 'title': '写 Agent 测试用例'}]}",
+      "duration_ms": 4,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 4ms"
+      ]
+    },
+    {
+      "case_id": "API-006",
+      "title": "非法 status 过滤应返回 400（契约要求）",
+      "kind": "api",
+      "ok": false,
+      "expected": "400",
+      "actual": "500 {'error': 'internal error: unexpected status filter'}",
+      "actual_status": 500,
+      "error": "期望 400，实际 500",
+      "evidence": "请求 GET /api/todos -> 500，响应体: {'error': 'internal error: unexpected status filter'}",
+      "duration_ms": 924,
+      "attempts": 3,
+      "retried": true,
+      "notes": [
+        "耗时 14ms"
+      ]
+    },
+    {
+      "case_id": "API-007",
+      "title": "创建合法待办应返回 201",
+      "kind": "api",
+      "ok": true,
+      "expected": "201",
+      "actual": "201 {'data': {'created_at': '2026-08-25T14:23:21.142471+00:00', 'id': 3, 'priority': 'high', 'status': 'active', 'title': '由 Agent 自动测试创建的待办'}}",
+      "actual_status": 201,
+      "error": "",
+      "evidence": "请求 POST /api/todos -> 201，响应体: {'data': {'created_at': '2026-08-25T14:23:21.142471+00:00', 'id': 3, 'priority': 'high', 'status': 'active', 'title': '由 Agent 自动测试创建的待办'}}",
+      "duration_ms": 4,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 4ms"
+      ]
+    },
+    {
+      "case_id": "API-008",
+      "title": "空 title 创建应返回 400（契约要求）",
+      "kind": "api",
+      "ok": false,
+      "expected": "400",
+      "actual": "200 {'data': {'created_at': '2026-08-25T14:23:21.147401+00:00', 'id': 4, 'priority': 'medium', 'status': 'active', 'title': '(empty)'}, 'warning': 'created with empty title'}",
+      "actual_status": 200,
+      "error": "期望 400，实际 200",
+      "evidence": "请求 POST /api/todos -> 200，响应体: {'data': {'created_at': '2026-08-25T14:23:21.147401+00:00', 'id': 4, 'priority': 'medium', 'status': 'active', 'title': '(empty)'}, 'warning': 'created with empty title'}",
+      "duration_ms": 3,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 3ms"
+      ]
+    },
+    {
+      "case_id": "API-009",
+      "title": "非法 priority 应返回 400",
+      "kind": "api",
+      "ok": true,
+      "expected": "400",
+      "actual": "400 {'error': 'invalid priority'}",
+      "actual_status": 400,
+      "error": "",
+      "evidence": "请求 POST /api/todos -> 400，响应体: {'error': 'invalid priority'}",
+      "duration_ms": 23,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 23ms"
+      ]
+    },
+    {
+      "case_id": "API-010",
+      "title": "查询存在的待办应返回 200",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'data': {'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /api/todos/1 -> 200，响应体: {'data': {'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}}",
+      "duration_ms": 3,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 3ms"
+      ]
+    },
+    {
+      "case_id": "API-011",
+      "title": "查询不存在的待办应返回 404",
+      "kind": "api",
+      "ok": true,
+      "expected": "404",
+      "actual": "404 {'error': 'todo not found'}",
+      "actual_status": 404,
+      "error": "",
+      "evidence": "请求 GET /api/todos/99999 -> 404，响应体: {'error': 'todo not found'}",
+      "duration_ms": 3,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 3ms"
+      ]
+    },
+    {
+      "case_id": "API-012",
+      "title": "更新待办状态应返回 200",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'data': {'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 2, 'priority': 'medium', 'status': 'active', 'title': '写 Agent 测试用例'}}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 PATCH /api/todos/2 -> 200，响应体: {'data': {'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 2, 'priority': 'medium', 'status': 'active', 'title': '写 Agent 测试用例'}}",
+      "duration_ms": 3,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 3ms"
+      ]
+    },
+    {
+      "case_id": "API-013",
+      "title": "非法状态更新应返回 400",
+      "kind": "api",
+      "ok": true,
+      "expected": "400",
+      "actual": "400 {'error': 'invalid status'}",
+      "actual_status": 400,
+      "error": "",
+      "evidence": "请求 PATCH /api/todos/2 -> 400，响应体: {'error': 'invalid status'}",
+      "duration_ms": 3,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 3ms"
+      ]
+    },
+    {
+      "case_id": "API-014",
+      "title": "删除不存在的待办应返回 404",
+      "kind": "api",
+      "ok": true,
+      "expected": "404",
+      "actual": "404 {'error': 'todo not found'}",
+      "actual_status": 404,
+      "error": "",
+      "evidence": "请求 DELETE /api/todos/99999 -> 404，响应体: {'error': 'todo not found'}",
+      "duration_ms": 4,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 4ms"
+      ]
+    },
+    {
+      "case_id": "API-015",
+      "title": "不稳定服务应最终成功（自动重试）",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'flaky': True, 'ok': True}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /api/flaky -> 200，响应体: {'flaky': True, 'ok': True}",
+      "duration_ms": 3,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 3ms"
+      ]
+    },
+    {
+      "case_id": "UI-001",
+      "title": "首页应正确渲染标题与导航",
+      "kind": "ui",
+      "ok": true,
+      "expected": "AgentTest Demo [data-testid=page-title] [data-testid=nav-todos]",
+      "actual": "全部断言通过",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "页面 http://127.0.0.1:5001/，DOM 摘要: AgentTest Demo — 智能待办清单 AgentTest Demo — 智能待办清单 这是一个供 Agent 自动测试演示用的待办清单应用。 登录 待办清单 version 1.0.0",
+      "duration_ms": 2320,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "后端: chrome",
+        "截图: reports\\screenshot_UI-001.png"
+      ]
+    },
+    {
+      "case_id": "UI-002",
+      "title": "登录页应包含登录表单",
+      "kind": "ui",
+      "ok": true,
+      "expected": "用户登录 [data-testid=login-form] [data-testid=input-username]",
+      "actual": "全部断言通过",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "页面 http://127.0.0.1:5001/login，DOM 摘要: 登录 用户登录 用户名 密码 登录",
+      "duration_ms": 2440,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "后端: chrome",
+        "截图: reports\\screenshot_UI-002.png"
+      ]
+    },
+    {
+      "case_id": "UI-003",
+      "title": "待办页应展示种子数据",
+      "kind": "ui",
+      "ok": true,
+      "expected": "[data-testid=todo-item] 学习 LangGraph 状态图",
+      "actual": "全部断言通过",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "页面 http://127.0.0.1:5001/todos，DOM 摘要: 待办清单 待办清单 学习 LangGraph 状态图 active 写 Agent 测试用例 active 由 Agent 自动测试创建的待办 active (empty) active",
+      "duration_ms": 2285,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "后端: chrome",
+        "截图: reports\\screenshot_UI-003.png"
+      ]
+    }
+  ],
+  "defects": [
+    {
+      "id": "DEF-001",
+      "title": "契约不符：非法参数应返回 400 却返回 500",
+      "severity": "high",
+      "category": "contract",
+      "endpoint": "API 非法 status 过滤应返回 400（契约要求）",
+      "evidence": "期望 400，实际 500；期望 400，实际 500",
+      "suggestion": "按 OpenAPI 契约对非法参数返回 400，并在网关层拦截未预期异常",
+      "related_case_ids": [
+        "API-006"
+      ]
+    },
+    {
+      "id": "DEF-002",
+      "title": "缺失参数校验：空值被接受并写入数据",
+      "severity": "high",
+      "category": "bug",
+      "endpoint": "API 空 title 创建应返回 400（契约要求）",
+      "evidence": "期望 400，实际 200（脏数据已写入）",
+      "suggestion": "服务端对 title 做非空校验，返回 400 且不落库",
+      "related_case_ids": [
+        "API-008"
+      ]
+    }
+  ],
+  "coverage": {
+    "GET /api/health": [
+      "API-001"
+    ],
+    "POST /api/login": [
+      "API-002",
+      "API-003",
+      "API-004"
+    ],
+    "GET /api/todos": [
+      "API-005",
+      "API-006"
+    ],
+    "POST /api/todos": [
+      "API-007",
+      "API-008",
+      "API-009"
+    ],
+    "GET /api/todos/1": [
+      "API-010"
+    ],
+    "GET /api/todos/99999": [
+      "API-011"
+    ],
+    "PATCH /api/todos/2": [
+      "API-012",
+      "API-013"
+    ],
+    "DELETE /api/todos/99999": [
+      "API-014"
+    ],
+    "GET /api/flaky": [
+      "API-015"
+    ],
+    "UI http://127.0.0.1:5001/": [
+      "UI-001"
+    ],
+    "UI http://127.0.0.1:5001/login": [
+      "UI-002"
+    ],
+    "UI http://127.0.0.1:5001/todos": [
+      "UI-003"
+    ]
+  },
+  "trace": [
+    "[planner] mock 生成 18 条测试用例",
+    "[executor] PASS API-001 健康检查应返回 200 (期望 200 / 实际 200 {'status': 'ok', 'time': '2026-08-25T14:23:20.197353+00:00', 'version': '1.0.0'} / 22ms)",
+    "[executor] PASS API-002 正确凭据登录应返回 200 和 token (期望 200 / 实际 200 {'token': 'demo-token-123', 'user': 'admin'} / 4ms)",
+    "[executor] PASS API-003 错误密码登录应返回 401 (期望 401 / 实际 401 {'error': 'invalid credentials'} / 3ms)",
+    "[executor] PASS API-004 缺参数登录应返回 400 (期望 400 / 实际 400 {'error': 'username and password are required'} / 4ms)",
+    "[executor] PASS API-005 查询待办列表应返回 200 (期望 200 / 实际 200 {'count': 2, 'data': [{'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}, {'created_at': '2026-08-25T14:23:20.121364+00:00 / 4ms)",
+    "[executor] FAIL API-006 非法 status 过滤应返回 400（契约要求） (期望 400 / 实际 500 {'error': 'internal error: unexpected status filter'} / 924ms / 重试2次)",
+    "[executor] PASS API-007 创建合法待办应返回 201 (期望 201 / 实际 201 {'data': {'created_at': '2026-08-25T14:23:21.142471+00:00', 'id': 3, 'priority': 'high', 'status': 'active', 'title': '由 Agent 自动测试创建的待办'}} / 4ms)",
+    "[executor] FAIL API-008 空 title 创建应返回 400（契约要求） (期望 400 / 实际 200 {'data': {'created_at': '2026-08-25T14:23:21.147401+00:00', 'id': 4, 'priority': 'medium', 'status': 'active', 'title': '(empty)'}, 'warning': 'created with empty title'} / 3ms)",
+    "[executor] PASS API-009 非法 priority 应返回 400 (期望 400 / 实际 400 {'error': 'invalid priority'} / 23ms)",
+    "[executor] PASS API-010 查询存在的待办应返回 200 (期望 200 / 实际 200 {'data': {'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}} / 3ms)",
+    "[executor] PASS API-011 查询不存在的待办应返回 404 (期望 404 / 实际 404 {'error': 'todo not found'} / 3ms)",
+    "[executor] PASS API-012 更新待办状态应返回 200 (期望 200 / 实际 200 {'data': {'created_at': '2026-08-25T14:23:20.121364+00:00', 'id': 2, 'priority': 'medium', 'status': 'active', 'title': '写 Agent 测试用例'}} / 3ms)",
+    "[executor] PASS API-013 非法状态更新应返回 400 (期望 400 / 实际 400 {'error': 'invalid status'} / 3ms)",
+    "[executor] PASS API-014 删除不存在的待办应返回 404 (期望 404 / 实际 404 {'error': 'todo not found'} / 4ms)",
+    "[executor] PASS API-015 不稳定服务应最终成功（自动重试） (期望 200 / 实际 200 {'flaky': True, 'ok': True} / 3ms)",
+    "[executor] PASS UI-001 首页应正确渲染标题与导航 (期望 AgentTest Demo [data-testid=page-title] [data-testid=nav-todos] / 实际 全部断言通过 / 2320ms)",
+    "[executor] PASS UI-002 登录页应包含登录表单 (期望 用户登录 [data-testid=login-form] [data-testid=input-username] / 实际 全部断言通过 / 2440ms)",
+    "[executor] PASS UI-003 待办页应展示种子数据 (期望 [data-testid=todo-item] 学习 LangGraph 状态图 / 实际 全部断言通过 / 2285ms)",
+    "[critic] 失败 2/18，归因出 2 个缺陷",
+    "[critic]   DEF-001 [high/contract] 契约不符：非法参数应返回 400 却返回 500 @ API 非法 status 过滤应返回 400（契约要求）",
+    "[critic]   DEF-002 [high/bug] 缺失参数校验：空值被接受并写入数据 @ API 空 title 创建应返回 400（契约要求）"
+  ],
+  "report_files": {}
+}

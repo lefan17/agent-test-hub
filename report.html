@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Agent 自动测试报告 - 对被测待办清单系统执行 API + Web UI 自动化测试，发现缺陷并生成报告</title>
+<style>
+  :root { --ok:#16a34a; --fail:#dc2626; --warn:#d97706; --muted:#6b7280; --line:#e5e7eb; }
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; margin: 0; background:#f8fafc; color:#0f172a; }
+  header { background: linear-gradient(135deg,#0f172a,#1e3a8a); color:#fff; padding: 28px 40px; }
+  header h1 { margin: 0 0 8px; font-size: 22px; }
+  header .meta { opacity: .85; font-size: 13px; line-height: 1.8; }
+  main { padding: 24px 40px 60px; max-width: 1200px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin: 20px 0; }
+  .card { background:#fff; border:1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card .num { font-size: 30px; font-weight: 700; }
+  .card .label { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .ok { color: var(--ok); } .fail { color: var(--fail); } .warn { color: var(--warn); }
+  h2 { margin: 34px 0 12px; font-size: 18px; border-left: 4px solid #1e3a8a; padding-left: 10px; }
+  .defect { background:#fff; border:1px solid var(--line); border-left:4px solid var(--fail); border-radius:10px; padding: 14px 16px; margin-bottom: 12px; }
+  .defect.flaky { border-left-color: var(--warn); }
+  .defect h3 { margin: 0 0 6px; font-size: 15px; }
+  .defect .tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; margin-right:8px; background:#fee2e2; color:#991b1b; }
+  .defect.flaky .tag { background:#fef3c7; color:#92400e; }
+  .defect p { margin: 4px 0; font-size: 13px; color:#334155; }
+  table { width:100%; border-collapse: collapse; background:#fff; border:1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { background:#f1f5f9; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+  .badge.pass { background:#dcfce7; color:#166534; } .badge.fail { background:#fee2e2; color:#991b1b; }
+  .badge.api { background:#e0f2fe; color:#075985; } .badge.ui { background:#ede9fe; color:#5b21b6; }
+  .trace { background:#0f172a; color:#d1d5db; border-radius: 10px; padding: 16px 18px; font-family: Consolas, monospace; font-size: 12px; line-height: 1.9; overflow-x: auto; }
+  .trace .t-pass { color:#4ade80; } .trace .t-fail { color:#f87171; }
+  img.shot { max-width: 420px; border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; }
+  .muted { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 Agent 自动测试报告</h1>
+  <div class="meta">
+    目标：对被测待办清单系统执行 API + Web UI 自动化测试，发现缺陷并生成报告<br>
+    Brain：mock（规则引擎 Mock，未配置 API Key）
+    ｜ 被测系统：http://127.0.0.1:5001
+    ｜ 开始 2026-08-25 22:23:20 ～ 结束 2026-08-25 22:23:28
+  </div>
+</header>
+<main>
+  <div class="cards">
+    <div class="card"><div class="num">18</div><div class="label">用例总数</div></div>
+    <div class="card"><div class="num ok">16</div><div class="label">通过</div></div>
+    <div class="card"><div class="num fail">2</div><div class="label">失败</div></div>
+    <div class="card"><div class="num fail">2</div><div class="label">发现缺陷</div></div>
+  </div>
+
+  
+  <h2>🐞 发现的缺陷（Agent 归因）</h2>
+  
+  <div class="defect ">
+    <h3>DEF-001 契约不符：非法参数应返回 400 却返回 500
+      <span class="tag">high / contract</span>
+    </h3>
+    <p><b>端点：</b>API 非法 status 过滤应返回 400（契约要求）</p>
+    <p><b>证据：</b>期望 400，实际 500；期望 400，实际 500</p>
+    <p><b>建议：</b>按 OpenAPI 契约对非法参数返回 400，并在网关层拦截未预期异常</p>
+    <p class="muted">关联用例：API-006</p>
+  </div>
+  
+  <div class="defect ">
+    <h3>DEF-002 缺失参数校验：空值被接受并写入数据
+      <span class="tag">high / bug</span>
+    </h3>
+    <p><b>端点：</b>API 空 title 创建应返回 400（契约要求）</p>
+    <p><b>证据：</b>期望 400，实际 200（脏数据已写入）</p>
+    <p><b>建议：</b>服务端对 title 做非空校验，返回 400 且不落库</p>
+    <p class="muted">关联用例：API-008</p>
+  </div>
+  
+  
+
+  <h2>📋 用例执行明细</h2>
+  <table>
+    <tr><th>ID</th><th>标题</th><th>类型</th><th>期望</th><th>实际</th><th>结果</th><th>耗时</th><th>备注</th></tr>
+    
+    <tr>
+      <td>API-001</td>
+      <td>健康检查应返回 200</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;status&#39;: &#39;ok&#39;, &#39;time&#39;: &#39;2026-08-25T14:23:20.197353+00:00&#39;, &#39;version&#39;: &#39;1.0.0&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>22ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 GET /api/health -&gt; 200，响应体: {&#39;status&#39;: &#39;ok&#39;, &#39;time&#39;: &#39;2026-08-25T14:23:20.197353+00:00&#39;, &#39;version&#39;: &#39;1.0.0&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-002</td>
+      <td>正确凭据登录应返回 200 和 token</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;token&#39;: &#39;demo-token-123&#39;, &#39;user&#39;: &#39;admin&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>4ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 POST /api/login -&gt; 200，响应体: {&#39;token&#39;: &#39;demo-token-123&#39;, &#39;user&#39;: &#39;admin&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-003</td>
+      <td>错误密码登录应返回 401</td>
+      <td><span class="badge api">api</span></td>
+      <td>401</td>
+      <td>401 {&#39;error&#39;: &#39;invalid credentials&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>3ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 POST /api/login -&gt; 401，响应体: {&#39;error&#39;: &#39;invalid credentials&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-004</td>
+      <td>缺参数登录应返回 400</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>400 {&#39;error&#39;: &#39;username and password are required&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>4ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 POST /api/login -&gt; 400，响应体: {&#39;error&#39;: &#39;username and password are required&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-005</td>
+      <td>查询待办列表应返回 200</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;count&#39;: 2, &#39;data&#39;: [{&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;act</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>4ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 GET /api/todos -&gt; 200，响应体: {&#39;count&#39;: 2, &#39;data&#39;: [{&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}, {&#39;created_at&#39;: &#39;20</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-006</td>
+      <td>非法 status 过滤应返回 400（契约要求）</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>500 {&#39;error&#39;: &#39;internal error: unexpected status filter&#39;}</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>924ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">期望 400，实际 500</div>
+        <div class="warn muted">已重试 2 次</div>
+        <div class="muted">请求 GET /api/todos -&gt; 500，响应体: {&#39;error&#39;: &#39;internal error: unexpected status filter&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-007</td>
+      <td>创建合法待办应返回 201</td>
+      <td><span class="badge api">api</span></td>
+      <td>201</td>
+      <td>201 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:21.142471+00:00&#39;, &#39;id&#39;: 3, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>4ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 POST /api/todos -&gt; 201，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:21.142471+00:00&#39;, &#39;id&#39;: 3, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;由 Agent 自动测试创建的待办&#39;}}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-008</td>
+      <td>空 title 创建应返回 400（契约要求）</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:21.147401+00:00&#39;, &#39;id&#39;: 4, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;titl</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>3ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">期望 400，实际 200</div>
+        
+        <div class="muted">请求 POST /api/todos -&gt; 200，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:21.147401+00:00&#39;, &#39;id&#39;: 4, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;(empty)&#39;}, &#39;warning&#39;: &#39;created with empty title&#39;</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-009</td>
+      <td>非法 priority 应返回 400</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>400 {&#39;error&#39;: &#39;invalid priority&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>23ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 POST /api/todos -&gt; 400，响应体: {&#39;error&#39;: &#39;invalid priority&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-010</td>
+      <td>查询存在的待办应返回 200</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>3ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 GET /api/todos/1 -&gt; 200，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-011</td>
+      <td>查询不存在的待办应返回 404</td>
+      <td><span class="badge api">api</span></td>
+      <td>404</td>
+      <td>404 {&#39;error&#39;: &#39;todo not found&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>3ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 GET /api/todos/99999 -&gt; 404，响应体: {&#39;error&#39;: &#39;todo not found&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-012</td>
+      <td>更新待办状态应返回 200</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00&#39;, &#39;id&#39;: 2, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;titl</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>3ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 PATCH /api/todos/2 -&gt; 200，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00&#39;, &#39;id&#39;: 2, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;写 Agent 测试用例&#39;}}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-013</td>
+      <td>非法状态更新应返回 400</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>400 {&#39;error&#39;: &#39;invalid status&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>3ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 PATCH /api/todos/2 -&gt; 400，响应体: {&#39;error&#39;: &#39;invalid status&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-014</td>
+      <td>删除不存在的待办应返回 404</td>
+      <td><span class="badge api">api</span></td>
+      <td>404</td>
+      <td>404 {&#39;error&#39;: &#39;todo not found&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>4ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 DELETE /api/todos/99999 -&gt; 404，响应体: {&#39;error&#39;: &#39;todo not found&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-015</td>
+      <td>不稳定服务应最终成功（自动重试）</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;flaky&#39;: True, &#39;ok&#39;: True}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>3ms</td>
+      <td>
+        
+        
+        <div class="muted">请求 GET /api/flaky -&gt; 200，响应体: {&#39;flaky&#39;: True, &#39;ok&#39;: True}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>UI-001</td>
+      <td>首页应正确渲染标题与导航</td>
+      <td><span class="badge ui">ui</span></td>
+      <td>AgentTest Demo [data-testid=page-title] [data-testid=nav-todos]</td>
+      <td>全部断言通过</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>2320ms</td>
+      <td>
+        
+        
+        <div class="muted">页面 http://127.0.0.1:5001/，DOM 摘要: AgentTest Demo — 智能待办清单 AgentTest Demo — 智能待办清单 这是一个供 Agent 自动测试演示用的待办清单应用。 登录 待办清单 version 1.0.0</div>
+        <img class="shot" src="screenshot_UI-001.png" alt="截图">
+      </td>
+    </tr>
+    
+    <tr>
+      <td>UI-002</td>
+      <td>登录页应包含登录表单</td>
+      <td><span class="badge ui">ui</span></td>
+      <td>用户登录 [data-testid=login-form] [data-testid=input-username]</td>
+      <td>全部断言通过</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>2440ms</td>
+      <td>
+        
+        
+        <div class="muted">页面 http://127.0.0.1:5001/login，DOM 摘要: 登录 用户登录 用户名 密码 登录</div>
+        <img class="shot" src="screenshot_UI-002.png" alt="截图">
+      </td>
+    </tr>
+    
+    <tr>
+      <td>UI-003</td>
+      <td>待办页应展示种子数据</td>
+      <td><span class="badge ui">ui</span></td>
+      <td>[data-testid=todo-item] 学习 LangGraph 状态图</td>
+      <td>全部断言通过</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>2285ms</td>
+      <td>
+        
+        
+        <div class="muted">页面 http://127.0.0.1:5001/todos，DOM 摘要: 待办清单 待办清单 学习 LangGraph 状态图 active 写 Agent 测试用例 active 由 Agent 自动测试创建的待办 active (empty) active</div>
+        <img class="shot" src="screenshot_UI-003.png" alt="截图">
+      </td>
+    </tr>
+    
+  </table>
+
+  <h2>🗺️ 覆盖率</h2>
+  <table>
+    <tr><th>端点 / 页面</th><th>覆盖用例</th></tr>
+    
+    <tr><td>GET /api/health</td><td>API-001</td></tr>
+    
+    <tr><td>POST /api/login</td><td>API-002, API-003, API-004</td></tr>
+    
+    <tr><td>GET /api/todos</td><td>API-005, API-006</td></tr>
+    
+    <tr><td>POST /api/todos</td><td>API-007, API-008, API-009</td></tr>
+    
+    <tr><td>GET /api/todos/1</td><td>API-010</td></tr>
+    
+    <tr><td>GET /api/todos/99999</td><td>API-011</td></tr>
+    
+    <tr><td>PATCH /api/todos/2</td><td>API-012, API-013</td></tr>
+    
+    <tr><td>DELETE /api/todos/99999</td><td>API-014</td></tr>
+    
+    <tr><td>GET /api/flaky</td><td>API-015</td></tr>
+    
+    <tr><td>UI http://127.0.0.1:5001/</td><td>UI-001</td></tr>
+    
+    <tr><td>UI http://127.0.0.1:5001/login</td><td>UI-002</td></tr>
+    
+    <tr><td>UI http://127.0.0.1:5001/todos</td><td>UI-003</td></tr>
+    
+  </table>
+
+  <h2>🧠 Agent 思考轨迹（trace）</h2>
+  <div class="trace">
+    
+    <div>[planner] mock 生成 18 条测试用例</div>
+    
+    <div>[executor] PASS API-001 健康检查应返回 200 (期望 200 / 实际 200 {&#39;status&#39;: &#39;ok&#39;, &#39;time&#39;: &#39;2026-08-25T14:23:20.197353+00:00&#39;, &#39;version&#39;: &#39;1.0.0&#39;} / 22ms)</div>
+    
+    <div>[executor] PASS API-002 正确凭据登录应返回 200 和 token (期望 200 / 实际 200 {&#39;token&#39;: &#39;demo-token-123&#39;, &#39;user&#39;: &#39;admin&#39;} / 4ms)</div>
+    
+    <div>[executor] PASS API-003 错误密码登录应返回 401 (期望 401 / 实际 401 {&#39;error&#39;: &#39;invalid credentials&#39;} / 3ms)</div>
+    
+    <div>[executor] PASS API-004 缺参数登录应返回 400 (期望 400 / 实际 400 {&#39;error&#39;: &#39;username and password are required&#39;} / 4ms)</div>
+    
+    <div>[executor] PASS API-005 查询待办列表应返回 200 (期望 200 / 实际 200 {&#39;count&#39;: 2, &#39;data&#39;: [{&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}, {&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00 / 4ms)</div>
+    
+    <div>[executor] FAIL API-006 非法 status 过滤应返回 400（契约要求） (期望 400 / 实际 500 {&#39;error&#39;: &#39;internal error: unexpected status filter&#39;} / 924ms / 重试2次)</div>
+    
+    <div>[executor] PASS API-007 创建合法待办应返回 201 (期望 201 / 实际 201 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:21.142471+00:00&#39;, &#39;id&#39;: 3, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;由 Agent 自动测试创建的待办&#39;}} / 4ms)</div>
+    
+    <div>[executor] FAIL API-008 空 title 创建应返回 400（契约要求） (期望 400 / 实际 200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:21.147401+00:00&#39;, &#39;id&#39;: 4, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;(empty)&#39;}, &#39;warning&#39;: &#39;created with empty title&#39;} / 3ms)</div>
+    
+    <div>[executor] PASS API-009 非法 priority 应返回 400 (期望 400 / 实际 400 {&#39;error&#39;: &#39;invalid priority&#39;} / 23ms)</div>
+    
+    <div>[executor] PASS API-010 查询存在的待办应返回 200 (期望 200 / 实际 200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}} / 3ms)</div>
+    
+    <div>[executor] PASS API-011 查询不存在的待办应返回 404 (期望 404 / 实际 404 {&#39;error&#39;: &#39;todo not found&#39;} / 3ms)</div>
+    
+    <div>[executor] PASS API-012 更新待办状态应返回 200 (期望 200 / 实际 200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-08-25T14:23:20.121364+00:00&#39;, &#39;id&#39;: 2, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;写 Agent 测试用例&#39;}} / 3ms)</div>
+    
+    <div>[executor] PASS API-013 非法状态更新应返回 400 (期望 400 / 实际 400 {&#39;error&#39;: &#39;invalid status&#39;} / 3ms)</div>
+    
+    <div>[executor] PASS API-014 删除不存在的待办应返回 404 (期望 404 / 实际 404 {&#39;error&#39;: &#39;todo not found&#39;} / 4ms)</div>
+    
+    <div>[executor] PASS API-015 不稳定服务应最终成功（自动重试） (期望 200 / 实际 200 {&#39;flaky&#39;: True, &#39;ok&#39;: True} / 3ms)</div>
+    
+    <div>[executor] PASS UI-001 首页应正确渲染标题与导航 (期望 AgentTest Demo [data-testid=page-title] [data-testid=nav-todos] / 实际 全部断言通过 / 2320ms)</div>
+    
+    <div>[executor] PASS UI-002 登录页应包含登录表单 (期望 用户登录 [data-testid=login-form] [data-testid=input-username] / 实际 全部断言通过 / 2440ms)</div>
+    
+    <div>[executor] PASS UI-003 待办页应展示种子数据 (期望 [data-testid=todo-item] 学习 LangGraph 状态图 / 实际 全部断言通过 / 2285ms)</div>
+    
+    <div>[critic] 失败 2/18，归因出 2 个缺陷</div>
+    
+    <div>[critic]   DEF-001 [high/contract] 契约不符：非法参数应返回 400 却返回 500 @ API 非法 status 过滤应返回 400（契约要求）</div>
+    
+    <div>[critic]   DEF-002 [high/bug] 缺失参数校验：空值被接受并写入数据 @ API 空 title 创建应返回 400（契约要求）</div>
+    
+  </div>
+</main>
+</body>
+</html>
