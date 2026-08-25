@@ -9,9 +9,9 @@ export PATH="/c/Program Files/GitHub CLI:$PATH"
 git switch main -q
 git branch gh-pages 2>/dev/null || true
 
-if [ ! -e .gh-pages-tmp/.git ]; then
-  git worktree add .gh-pages-tmp gh-pages 2>/dev/null || git worktree prune -q && git worktree add .gh-pages-tmp gh-pages
-fi
+rm -rf .gh-pages-tmp
+git worktree prune -q || true
+git worktree add .gh-pages-tmp gh-pages
 
 cd .gh-pages-tmp
 git pull origin gh-pages -q || true
