@@ -3,6 +3,8 @@
 > 一个项目，同时打通 **软件测试工程师** 与 **Agent 开发工程师** 两条求职路线。
 >
 > LangGraph + LangChain 编排的 **API + Web UI 双覆盖** 自动化测试系统：Agent 从 OpenAPI 契约生成测试计划、执行测试、自动重试、归因缺陷、产出可视化报告。
+>
+> 📄 **在线测试报告（GitHub Pages）**：https://lefan17.github.io/agent-test-hub/report.html
 
 ## 为什么这个项目能同时投两个岗位
 
