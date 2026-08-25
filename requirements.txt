@@ -1,9 +1,0 @@
-# 推荐在 Python 3.10+ 虚拟环境中安装（本仓库在 Python 3.12 上验证）
-langchain==0.3.30
-langchain-openai==0.3.9
-langgraph==0.2.76
-flask>=3.0
-requests>=2.32
-beautifulsoup4>=4.12
-selenium>=4.20
-pytest>=8.0
