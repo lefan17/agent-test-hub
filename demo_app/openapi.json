@@ -1,0 +1,129 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AgentTest Demo API",
+    "version": "1.0.0",
+    "description": "供 Agent 自动测试演示的待办清单服务契约。实现若与契约不符即为缺陷。"
+  },
+  "servers": [{ "url": "http://127.0.0.1:5001" }],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "健康检查",
+        "responses": {
+          "200": { "description": "服务正常", "content": { "application/json": { "example": { "status": "ok", "version": "1.0.0" } } } }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "summary": "登录获取 token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": { "username": { "type": "string" }, "password": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "登录成功，返回 token" },
+          "400": { "description": "缺少用户名或密码" },
+          "401": { "description": "用户名或密码错误" }
+        }
+      }
+    },
+    "/api/todos": {
+      "get": {
+        "summary": "查询待办列表",
+        "parameters": [
+          { "name": "status", "in": "query", "required": false, "schema": { "type": "string", "enum": ["active", "done"] } }
+        ],
+        "responses": {
+          "200": { "description": "待办列表" },
+          "400": { "description": "status 参数非法（契约要求 400）" }
+        }
+      },
+      "post": {
+        "summary": "创建待办",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": { "type": "string", "minLength": 1 },
+                  "priority": { "type": "string", "enum": ["low", "medium", "high"], "default": "medium" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "创建成功" },
+          "400": { "description": "title 为空或 priority 非法（契约要求 400）" }
+        }
+      }
+    },
+    "/api/todos/{id}": {
+      "get": {
+        "summary": "查询单个待办",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "待办详情" },
+          "404": { "description": "不存在" }
+        }
+      },
+      "patch": {
+        "summary": "更新待办状态",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": { "status": { "type": "string", "enum": ["active", "done"] } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "更新成功" },
+          "400": { "description": "status 非法" },
+          "404": { "description": "不存在" }
+        }
+      },
+      "delete": {
+        "summary": "删除待办",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "删除成功" },
+          "404": { "description": "不存在" }
+        }
+      }
+    },
+    "/api/flaky": {
+      "get": {
+        "summary": "不稳定服务（约 10% 概率 503，用于演示重试机制）",
+        "responses": {
+          "200": { "description": "成功" },
+          "503": { "description": "服务暂时不可用" }
+        }
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "summary": "待办统计",
+        "responses": { "200": { "description": "统计信息" } }
+      }
+    }
+  }
+}
