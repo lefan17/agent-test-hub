@@ -17,6 +17,22 @@ def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+def _load_dotenv(path: Path = None) -> None:
+    """轻量 .env 加载：已存在的环境变量优先，不覆盖。"""
+    path = path or Path(".env")
+    if not path.exists():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 @dataclass
 class Config:
     demo_url: str = "http://127.0.0.1:5001"
@@ -50,6 +66,7 @@ class Config:
 
     @classmethod
     def from_env(cls) -> "Config":
+        _load_dotenv()
         return cls(
             demo_url=_env("AGENTTEST_DEMO_URL", "http://127.0.0.1:5001"),
             llm_api_key=_env("AGENTTEST_LLM_API_KEY"),
