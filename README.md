@@ -6,7 +6,7 @@
 >
 > 📄 **在线测试报告（GitHub Pages）**：https://lefan17.github.io/agent-test-hub/report.html
 >
-> 🧪 **配套实战项目**：[software-testing-week1](https://github.com/lefan17/software-testing-week1) —— 软件测试一周速成实战：带缺陷的 Flask 被测系统 + 27 条登录接口 pytest 用例 + 用例设计/测试报告/SQL 练习文档（本项目的「测试基本功」训练场）
+> 🧪 **配套实践项目**：[software-testing-practice](https://github.com/lefan17/software-testing-practice) —— 契约驱动的接口自动化测试实践：Flask 被测系统 + 27 条登录接口 pytest 用例 + 用例设计/测试报告/SQL 数据校验文档（测试基本功配套仓库）
 
 ## 为什么这个项目能同时投两个岗位
 
