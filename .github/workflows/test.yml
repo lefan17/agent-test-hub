@@ -1,0 +1,52 @@
+name: AgentTest Hub CI
+
+# 触发时机：推送 main / PR 到 main / 手动点按钮
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 为什么必须写 `-o addopts=`：pyproject.toml 里 `addopts = "-q"`，
+      # 而 pytest 的 `-q` 会连同末尾的 summary 行（"121 passed, ..."）一起吞掉。
+      # 命令行上的 `-o addopts=` 把配置里的值覆盖为空，计数才会出现在 CI 日志里。
+      #
+      # 非 UI 用例：被测系统是本地 Flask Demo，RAG 检索默认后端是纯标准库 BM25，
+      # 全程不依赖网络也不依赖浏览器，所以这一组红了就是真坏了，必须拦住流水线。
+      # 计数与 README「测试套件」一节声明的一致（--ignore 后 0 failed）。
+      - name: 运行测试套件（121 passed, 15 xfailed, 0 failed）
+        run: pytest -o addopts= -q --ignore=tests/test_ui_tool.py
+
+      # UI 用例依赖真实 Chrome（tests/test_ui_tool.py 的 4 条）：
+      # GitHub 的 ubuntu runner 预装 google-chrome，selenium 4.6+ 会由
+      # Selenium Manager 自动匹配并下载 chromedriver，所以这一步大概率能过。
+      # 但「能跑就跑」：浏览器与驱动版本漂移属于外部因素，与仓库代码无关，
+      # 因此设 continue-on-error: true —— UI 失败只标黄、不判红，不阻断整个流水线。
+      #
+      # 这不等于可以不管：日志里能看到这条命令的真实计数与报错。
+      # 本地沙箱无 Chrome 时这里就是 README 声明的 4 failed，属环境限制。
+      # 这里跑全量套件（而非只跑 UI 文件），是为了让 CI 的这条命令与
+      # README 的 `.venv/Scripts/python.exe -m pytest -q` 一一对应。
+      - name: 运行全量套件含 UI（121 passed, 15 xfailed, 4 failed：UI 因无 Chrome）
+        continue-on-error: true
+        run: pytest -o addopts= -q

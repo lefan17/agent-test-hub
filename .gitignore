@@ -21,9 +21,14 @@ demo_screenshots/
 .vscode/
 *.swp
 
+# DSH 工具产物（视觉路由器运行快照，文件名编码了本机绝对路径，不进公开仓库）
+.dsh-vision-router/
+
 # 临时/调试遗留物（不提交）
 .tmp/
 _shim/
+debug.log
+*.log
 _pipdbg.txt
 _t.py
 _t2.py
