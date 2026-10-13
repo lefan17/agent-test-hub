@@ -29,7 +29,7 @@
 /Dockerfile             @lefan17
 /docker-compose.yml     @lefan17
 /.pre-commit-config.yaml @lefan17
-/commitlint.config.js   @lefan17
+/commitlint.config.mjs  @lefan17
 /.husky/                @lefan17
 
 # ---------- 依赖清单：升级依赖会牵动 CI、容器与安全扫描 ----------

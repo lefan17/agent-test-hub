@@ -31,7 +31,7 @@ env:
   # 全局统一，避免各 job 各写一份导致口径漂移
   PYTHON_VERSION: "3.12"
   # 覆盖率门槛（实测见 pyproject.toml [tool.coverage.report] 上方注释）：
-  #   仓库默认配置（分支覆盖）73.44% / 关掉分支的语句覆盖对照 76% → 门槛取 70，
+  #   仓库默认配置（分支覆盖）73.46% / 关掉分支的语句覆盖对照 76% → 门槛取 70，
   #   留约 3.4 个百分点的余量。取整不取小数，是为了让门槛是「好记好解释的整数」。
   COV_FAIL_UNDER: "70"
 
@@ -232,19 +232,61 @@ jobs:
       # 冒烟一：运行镜像能真的把被测系统起起来并响应 /openapi.json。
       # 只看「构建成功」不算数 —— 构建成功但 CMD 写错、端口没暴露、
       # 包导入路径不对，都会在容器起来的瞬间才暴露。
+      #
+      # 失败时必须能自证是「哪一侧」的问题，所以探活分两段独立探测：
+      #   内层 docker exec -> http://127.0.0.1:5001  （只有容器里真的起来了才会通）
+      #   外层 curl        -> http://127.0.0.1:5001  （还要端口转发也对才会通）
+      # 两段的组合能把故障定位到唯一一类原因：
+      #   内层失败          → 服务根本没起来（CMD / 导入 / 依赖 / 端口）
+      #   内层通、外层失败  → 服务起来了但宿主不可达（绑定地址 / -p 映射）
+      # 这个区分是必需的：本 job 第一版只探了外层，CI 红在
+      #   `curl: (56) Recv failure: Connection reset by peer`
+      # 当时无法一眼判断是没起来还是绑了回环，排查靠猜。
       - name: 冒烟：运行镜像起服务并探活
         run: |
-          set -eux
+          set -uxo pipefail
           docker run -d --name agenttest-smoke -p 5001:5001 agent-test-hub:ci
+
+          # 容器内探活（镜像里没有 curl/wget，用标准库 urllib）
+          inner_probe() {
+            docker exec agenttest-smoke python -c \
+              "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5001/openapi.json', timeout=3).status == 200 else 1)"
+          }
+
+          inner_ok=no
+          outer_ok=no
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:5001/openapi.json > /dev/null; then
-              echo "被测系统已就绪（第 ${i} 次探测）"
+            if [ "$inner_ok" = "no" ] && inner_probe; then
+              echo "容器内探活通过（第 ${i} 次）"
+              inner_ok=yes
+            fi
+            if [ "$outer_ok" = "no" ] && curl -fsS http://127.0.0.1:5001/openapi.json > /dev/null; then
+              echo "宿主侧探活通过（第 ${i} 次）"
+              outer_ok=yes
+            fi
+            if [ "$inner_ok" = "yes" ] && [ "$outer_ok" = "yes" ]; then
+              echo "被测系统已就绪，容器内与宿主侧均可达"
               exit 0
             fi
             sleep 2
           done
-          echo "探活超时，容器日志如下："
-          docker logs agenttest-smoke
+
+          echo "::group::失败现场：容器状态与端口映射"
+          docker ps -a --filter name=agenttest-smoke
+          docker port agenttest-smoke || true
+          echo "::endgroup::"
+          echo "::group::失败现场：容器日志"
+          docker logs agenttest-smoke || true
+          echo "::endgroup::"
+
+          echo "诊断：container_reachable=${inner_ok} host_reachable=${outer_ok}"
+          if [ "$inner_ok" = "no" ]; then
+            echo "容器内 127.0.0.1:5001 不通 → 服务没起来（查 CMD / 导入 / 依赖 / EXPOSE）"
+          elif [ "$outer_ok" = "no" ]; then
+            echo "容器内通、宿主侧不通 → 绑定地址或端口映射问题"
+            echo "  检查 AGENTTEST_BIND_HOST（Dockerfile ENV 与 compose environment 都应是 0.0.0.0）"
+            echo "  以及 docker port 输出里 5001/tcp 是否映射到了宿主 5001"
+          fi
           exit 1
 
       - name: 冒烟：容器日志留档（失败时排查用）
@@ -334,7 +376,9 @@ jobs:
   #
   # 双保险，两句都阻塞：
   #   a) wagoid/commitlint-github-action：Node 生态的标准做法，
-  #      读仓库根的 commitlint.config.js（本地由 .husky/commit-msg 调用同一份配置）
+  #      读仓库根的 commitlint.config.mjs（本地由 .husky/commit-msg 调用同一份配置）
+  #      ⚠️ 必须是 .mjs：该 action 不接受 .js 配置，且 package.json 未声明
+  #         "type": "module"，.js 会被当成 CommonJS。见 commitlint.config.mjs 头部注释。
   #   b) scripts/check_commit_msg.py：零依赖纯标准库实现，
   #      与 .pre-commit-config.yaml 的 local hook 是同一份逻辑。
   #      存在的意义是「没有 Node 的机器（同事本机 / 精简容器）也能做同样的校验」，
@@ -353,7 +397,7 @@ jobs:
       - name: commitlint（Node 生态标准工具）
         uses: wagoid/commitlint-github-action@v6
         with:
-          configFile: commitlint.config.js
+          configFile: commitlint.config.mjs
           failOnWarnings: false
 
       - name: 安装 Python ${{ env.PYTHON_VERSION }}

@@ -103,11 +103,14 @@ select = ["E4", "E9", "W6", "F63", "F7", "F82", "PGH", "PIE", "RUF100"]
 # 门槛值 70 的来源是**实测**，不是拍脑袋：
 #   python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
 #     --cov=agenttest --cov=demo_app --cov-report=term-missing
-#   仓库默认配置（下面 branch = true）：TOTAL 1378 stmts / 330 miss / 354 branch = 73.44%
-#   关掉分支覆盖对照：            TOTAL 1380 stmts / 331 miss = 76%
-# 取整到 70：低于两条实测口径（73.44% / 76%）留有约 3.4 个百分点的余量，
-# 但足以拦住「整块模块失去覆盖」这类退化（例如 runner.py 122 行未覆盖时
-# 整体会掉到 64% 左右，必然失败）。
+#   仓库默认配置（下面 branch = true）：TOTAL 1379 stmts / 330 miss / 354 branch = 73.46%
+#   关掉分支覆盖对照：            TOTAL 1381 stmts / 331 miss = 76%
+# 取整到 70：低于两条实测口径（73.46% / 76%）留有约 3.4 个百分点的余量，
+# 但足以拦住「大模块整体失去覆盖」这类退化（实测反推：graph/nodes.py 的
+# 222 行若整体失去覆盖会掉到 69.9%，必然失败；但 demo_app/rag.py 的 264 行
+# 只剩 71.1%，拦不住 —— 见 README「覆盖率」一节的实测反推表）。
+# 另：本机多轮实测在 73.46%~73.56% 之间抖动（rag.py 的 FLAKY-001
+# 有 10% 概率返回 503），门槛取 70 也刻意覆盖了这段抖动幅度。
 # 覆盖率画像（谁没被覆盖）见 README「覆盖率」一节。
 # ---------------------------------------------------------------------------
 [tool.coverage.run]
@@ -122,8 +125,8 @@ omit = ["agenttest/__main__.py"]
 # 实测（2026-10 本机 .venv，Python 3.12.10）：
 #   python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
 #     --cov=agenttest --cov=demo_app --cov-report=term-missing
-#   → TOTAL 1378 stmts / 330 miss / 354 branch = 73.44%（branch = true，本配置）
-#   → 对照关掉 branch：1380 stmts / 331 miss = 76%
+#   → TOTAL 1379 stmts / 330 miss / 354 branch = 73.46%（branch = true，本配置）
+#   → 对照关掉 branch：1381 stmts / 331 miss = 76%
 # 门槛取 70：比分支口径实测低 3.4 个百分点，给后续重构留出余量，
 # 但仍能拦住「大段代码失去覆盖」这类退化。
 fail_under = 70

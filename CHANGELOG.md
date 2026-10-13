@@ -57,7 +57,7 @@
 - **pre-commit**：`.pre-commit-config.yaml`——基础文件卫生 + ruff + mypy +
   提交信息规范 local hook。hooks 只用**已在 CI 里出现过的工具**，
   不引入需要额外网络或重型环境的 hook。
-- **提交规范工具化**：`commitlint.config.js` + `.husky/commit-msg`（Node 生态标准做法），
+- **提交规范工具化**：`commitlint.config.mjs` + `.husky/commit-msg`（Node 生态标准做法），
   以及零依赖替代实现 `scripts/check_commit_msg.py`（纯标准库，
   供没有 Node 的机器与 CI 复核使用）。
 - **协作模板**：`.github/PULL_REQUEST_TEMPLATE.md`、
@@ -77,7 +77,26 @@
   **因此不设置 `AGENTTEST_ENV` 时的行为与引入分层之前完全相同**。
 - **`.env.example`** 补上环境分层说明。
 
-### 修复
+### 修复（CI 首次运行暴露的两条红）
+
+推送后 CI run 两条 job 变红，均为真实缺陷，已修复：
+
+- **容器 job 冒烟失败**：`demo_app/app.py` 把服务绑在 `127.0.0.1`，在容器里即容器自身的回环，
+  宿主侧 `-p 5001:5001` 的连接被 reset（`curl: (56) Recv failure: Connection reset by peer`），
+  容器日志却显示一切正常。改为 `os.getenv("AGENTTEST_BIND_HOST", "127.0.0.1")`——
+  **默认值与改动前逐字符一致**，仅由 `Dockerfile` 与 `docker-compose.yml` 注入 `0.0.0.0`。
+  本机以 `netstat -ano` 实测两侧：不设变量 → `TCP 127.0.0.1:5001 LISTENING`；
+  设 `0.0.0.0` → `TCP 0.0.0.0:5001 LISTENING`。
+  冒烟步骤同时改为**双段探活**（`docker exec` 容器内 + `curl` 宿主侧），
+  失败时能自证是「服务没起来」还是「宿主机不可达」，不再只丢一句 reset。
+- **提交规范 job 失败**：配置文件名原先用了 `.js` 扩展名，且开头是 6 行 `#` 注释
+  （Python/shell 风格，**不是合法 JavaScript**），该文件从未被任何 JS 解析器读过；
+  而 `wagoid/commitlint-github-action@v6` 只接受 `.mjs`。
+  已改名为 `commitlint.config.mjs` 并写成合法 ESM（`export default {...}`，注释改 `//`），
+  全部引用同步更新。本机以真实 `@commitlint/load` + `@commitlint/lint`（npm 走代理装成功）
+  验证 7 个用例全部符合预期：4 条合规消息通过，非法 type / 无 type / 大写 scope 各被对应规则拒绝。
+
+### 修复（第一轮：mypy 三个类型错误）
 
 修掉 `mypy agenttest demo_app` 报出的 3 个真实类型错误（均为最小改动，未使用 `# type: ignore`）：
 
@@ -95,7 +114,7 @@
 ### 变更
 
 - **`README.md`**：补充工程化能力说明；测试数字更新为本机实测值
-  （`121 passed, 15 xfailed`；覆盖率实测 语句 76% / 分支 73.44%，门槛 70）。
+  （`121 passed, 15 xfailed`；覆盖率实测 语句 76% / 分支 73.46%，门槛 70）。
 - **`pyproject.toml`**：新增 `[tool.mypy]`、`[tool.ruff]`、`[tool.coverage.run]`、
   `[tool.coverage.report]`。
 - **`agenttest/config.py`**：为支持环境分层而重构配置读取
@@ -145,8 +164,14 @@
   `--cache-dir` 也绕不过。**仅在 CI 的 `security` job 里被真实验证。**
 - **`pre-commit`**：同上，需要为 hook 创建虚拟环境，本机从未执行；
   配置只做过 `yaml.safe_load` 静态语法校验。等价检查由 CI 的 `lint` job 承担。
-- **`commitlint` / husky**：本机无 `node_modules`，`.husky/commit-msg`
-  从未真实触发过。CI 的 `commit-msg` job 覆盖同一份规则。
+- **`commitlint` / husky**：`npm install` 走本机代理
+  （`HTTP_PROXY/HTTPS_PROXY=http://127.0.0.1:7897`）**已成功**装出 `node_modules/`，
+  因此 `commitlint.config.mjs` 的语法与规则已用**真实** `@commitlint/load` +
+  `@commitlint/lint` 验证（7 个用例全部符合预期，见上文「修复」段）。
+  但**完整的 `commitlint` CLI 仍无法本机运行**：它会 spawn `git` 取提交信息，
+  而沙箱的命名管道限制让 `spawn` 报 `Error: spawn EPERM`——这是沙箱边界，
+  不是配置问题。`.husky/commit-msg` 同样从未真实触发过。
+  CI 的 `commit-msg` job 覆盖同一份规则。
 
 ---
 

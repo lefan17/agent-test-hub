@@ -32,7 +32,7 @@
 - **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、证据与截图
 - **自带被测系统**：Flask Demo 应用注入 2 个 API 契约缺陷 + 1 处 Flaky 注入 + 6 个 RAG 检索缺陷开关（覆盖 9 个缺陷面），Agent 演示「发现缺陷」而非「跑一遍全绿」
 - **零新增依赖**：RAG 检索默认后端用纯标准库实现 BM25（`demo_app/rag.py`），不引入 rank_bm25 / jieba / numpy 等任何检索库，离线确定性可回归
-- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率门槛（实测分支覆盖 73.44% / 门槛 70%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
+- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率门槛（实测分支覆盖 73.46% / 门槛 70%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
 
 ## 工程化能力
 
@@ -48,7 +48,7 @@
 | 依赖锁文件 | `requirements.lock`（pip-tools 生成）、CI 校验步骤 | `python -m piptools compile requirements.txt -o requirements.lock` |
 | 依赖分层 | `requirements.txt`（运行）/ `requirements-dev.txt`（工程化） | 镜像用 `ARG INSTALL_DEV=0/1` 切换 |
 | 本地钩子 | `.pre-commit-config.yaml` | `python -m pre-commit run --all-files` |
-| 提交规范 | `commitlint.config.js`、`.husky/commit-msg`、`scripts/check_commit_msg.py` | 见 [CONTRIBUTING.md](CONTRIBUTING.md#3-提交信息规范conventional-commits) |
+| 提交规范 | `commitlint.config.mjs`、`.husky/commit-msg`、`scripts/check_commit_msg.py` | 见 [CONTRIBUTING.md](CONTRIBUTING.md#3-提交信息规范conventional-commits) |
 | 协作模板 | `.github/PULL_REQUEST_TEMPLATE.md`、`.github/ISSUE_TEMPLATE/`、`CODEOWNERS` | 开 PR / issue 时自动带出 |
 | 环境分层 | `scripts/env/{dev,staging,prod}.env`、`agenttest/config.py` | `AGENTTEST_ENV=staging python -m agenttest run` |
 | CI 定时与并发 | `.github/workflows/test.yml` `on.schedule` / `concurrency` | 每周日 19:00 UTC 夜间回归；同 ref 自动取消旧运行 |
@@ -59,23 +59,25 @@
 实测命令与结果（本机 `.venv`，Python 3.12.10）：
 
 ```bash
-# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1378 stmts / 330 miss / 354 branch = 73.44%
+# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1379 stmts / 330 miss / 354 branch = 73.46%
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing
 
-# 对照：关掉分支覆盖（临时 --cov-config）→ TOTAL 1380 stmts / 331 miss = 76%
+# 对照：关掉分支覆盖（临时 --cov-config）→ TOTAL 1381 stmts / 331 miss = 76%
 # 分支覆盖默认比语句覆盖低约 2.5 个百分点，换来的信息量更大，因此默认开着。
 ```
 
-**CI 门槛取 70**，理由：低于两条实测口径（语句覆盖 76% / 分支覆盖 73.44%），留约 3.4 个百分点的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么，按当前总数（1378 语句 + 354 分支，分子 ≈1272）反推如下——**实测口径，不是估算**：
+**CI 门槛取 70**，理由：低于两条实测口径（语句覆盖 76% / 分支覆盖 73.46%），留约 3.4 个百分点的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么，按当前总数（1379 语句 + 354 分支，分子 ≈1273）反推如下——**实测口径，不是估算**：
 
 | 假设的退化 | 反推覆盖率 | 是否击穿 70 |
 | --- | --- | --- |
-| `agenttest/graph/nodes.py` 整体失去覆盖 | 69.8% | ✅ 拦得住 |
-| `demo_app/rag.py`（264 行）整体失去覆盖 | 71.0% | ❌ 拦不住 |
-| `demo_app/app.py`（179 行）整体失去覆盖 | 71.2% | ❌ 拦不住 |
+| `agenttest/graph/nodes.py` 整体失去覆盖 | 69.9% | ✅ 拦得住 |
+| `demo_app/rag.py`（264 行）整体失去覆盖 | 71.1% | ❌ 拦不住 |
+| `demo_app/app.py`（180 行）整体失去覆盖 | 71.3% | ❌ 拦不住 |
 
-**诚实结论：70 这个门槛只能拦住「大模块 + 大丢失」的组合，拦不住单个中等模块的完全失守。** 之所以不往上抬到 75：那会把门槛压到实测值（73.44%）之上，CI 首次运行就是红的，只能靠删测试或写无意义测试来凑，属于自欺。真正能拦住单模块退化的手段是**每文件门槛**（`[tool.coverage.report]` 的 per-file `fail_under`，或 Codecov 的 patch coverage），本仓库尚未启用，已记入 CHANGELOG 的 Unreleased 段作为后续任务。
+**诚实结论：70 这个门槛只能拦住「大模块 + 大丢失」的组合，拦不住单个中等模块的完全失守。** 之所以不往上抬到 75：那会把门槛压到实测值（73.46%）之上，CI 首次运行就是红的，只能靠删测试或写无意义测试来凑，属于自欺。真正能拦住单模块退化的手段是**每文件门槛**（`[tool.coverage.report]` 的 per-file `fail_under`，或 Codecov 的 patch coverage），本仓库尚未启用，已记入 CHANGELOG 的 Unreleased 段作为后续任务。
+
+> 门槛还刻意留出了实测抖动幅度：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），本机多轮实测在 **73.46% ~ 73.56%** 之间波动。门槛压到 73 就会间歇性变红，而间歇性红最终一定会被人用重跑糊过去。
 
 覆盖率短板（`--cov-report=term-missing` 实测，按缺失语句数排序）：
 
@@ -102,8 +104,8 @@
 | `docker build` / `docker run` | **未验证** | 本机 Docker daemon 无法启动（WSL `E_ACCESSDENIED`）。`Dockerfile` 与 `docker-compose.yml` **只通过 `docker compose --profile '*' config --quiet` 静态校验（EXIT=0）**，从未真实构建或运行。真实构建与冒烟由 CI 的 `container` job 承担。 |
 | `pip-audit` | **未验证** | 需创建临时虚拟环境，沙箱拒绝 `ensurepip`（`PermissionError: [WinError 5]`）；且它把缓存写死在 `%LOCALAPPDATA%\pip-audit`，`--cache-dir` 也绕不过。仅在 CI 的 `security` job 里被真实验证。配置已就位，本地从未跑通。 |
 | `pre-commit` | **未验证** | 同上（hook 需要独立虚拟环境）。配置仅通过 `yaml.safe_load` 静态语法校验；等价检查由 CI 的 `lint` job 承担。 |
-| `commitlint` / husky 钩子 | **未验证** | 本机无 `node_modules`（沙箱拒绝 `npm install`），`.husky/commit-msg` 从未真实触发。CI 的 `commit-msg` job 覆盖同一份规则，另有零依赖的 Python 实现可本地跑。 |
-| `requirements-dev.txt` 钉的两个版本 | **无法核对** | `pre-commit==4.3.0` 与 `commitizen==4.9.1` **本机从未安装过**（沙箱拒绝建 venv），版本号无法核对。其余六个包（pytest-cov / coverage / ruff / mypy / pip-audit / pip-tools）已用 `importlib.metadata` + `pip show` 双口径实测，**与钉版逐条一致**（详见该文件顶部核对表）。另：本机这三个包是从同机另一个 3.12 venv 复制到 `site-packages` 的，不是 `pip install` 进来的——「覆盖率 73.44%」「ruff 全绿」是真跑出来的，但 CI 能否解析安装这些版本号，只能等 CI 首次运行。 |
+| `commitlint` 完整 CLI | **未验证** | `npm install` 已走本机代理成功（`node_modules/` 存在），`commitlint.config.mjs` 的语法与规则已用真实 `@commitlint/load` + `@commitlint/lint` 验证（7 个用例全部符合预期）。但 commitlint CLI 会 spawn `git` 取提交信息，沙箱命名管道限制让 `spawn` 报 `Error: spawn EPERM`——沙箱边界，非配置问题。`.husky/commit-msg` 同样未真实触发。CI 的 `commit-msg` job 覆盖同一份规则。 |
+| `requirements-dev.txt` 钉的两个版本 | **无法核对** | `pre-commit==4.3.0` 与 `commitizen==4.9.1` **本机从未安装过**（沙箱拒绝建 venv），版本号无法核对。其余六个包（pytest-cov / coverage / ruff / mypy / pip-audit / pip-tools）已用 `importlib.metadata` + `pip show` 双口径实测，**与钉版逐条一致**（详见该文件顶部核对表）。另：本机这三个包是从同机另一个 3.12 venv 复制到 `site-packages` 的，不是 `pip install` 进来的——「覆盖率 73.46%」「ruff 全绿」是真跑出来的，但 CI 能否解析安装这些版本号，只能等 CI 首次运行。 |
 
 
 ## 测试套件
@@ -120,7 +122,7 @@
 # 带覆盖率门槛（CI test job 同一条命令）
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing --cov-fail-under=70
-#   → 121 passed, 15 xfailed, 1 warning；TOTAL 1378 stmts / 330 miss / 354 branch = 73.44%
+#   → 121 passed, 15 xfailed, 1 warning；TOTAL 1379 stmts / 330 miss / 354 branch = 73.46%
 #   → Required test coverage of 70.0% reached.
 ```
 
@@ -262,6 +264,15 @@ docker compose --profile app --profile test up --build
 ```
 
 镜像基于 `python:3.12-slim`（与 CI 及本机 `.venv` 的 3.12 对齐，避免版本漂移）。`Dockerfile` 用 `ARG INSTALL_DEV` 区分两批依赖：`0` 只装 `requirements.txt`（起被测系统），`1` 额外装 `requirements-dev.txt`（跑测试与覆盖率）。依赖层与源码层分离，改代码不会让依赖层缓存失效。
+
+**容器内必须绑 `0.0.0.0`**：`demo_app/app.py:305` 原本写死 `host="127.0.0.1"`，那在容器里是**容器自身的回环**，宿主经 `-p 5001:5001` 转发进来的连接会被容器网络栈直接 reset，表现为 `curl: (56) Recv failure: Connection reset by peer`——容器日志却显示 `* Running on http://127.0.0.1:5001`，看起来一切正常。现在该行读 `os.getenv("AGENTTEST_BIND_HOST", "127.0.0.1")`，默认值与改动前**逐字符一致**，只有 `Dockerfile` 与 `docker-compose.yml` 显式注入 `AGENTTEST_BIND_HOST=0.0.0.0`。已在本机用 `netstat -ano` 实测两侧都符合预期：
+
+```
+不设该变量           → TCP 127.0.0.1:5001 LISTENING
+AGENTTEST_BIND_HOST=0.0.0.0 → TCP 0.0.0.0:5001   LISTENING
+```
+
+CI 的冒烟步骤也据此改成**双段探活**（`docker exec` 查容器内 + `curl` 查宿主侧），失败时能直接区分「服务没起来」与「服务起来了但宿主不可达」，而不是只丢一句 reset。
 
 **构建上下文**由 `.dockerignore` 收窄：排除 `.git/`（完整历史）、`.venv/`（数百 MB）、`__pycache__/`、各类工具缓存、`reports/`、`.tmp/`，以及 `.env*`——后者可能含 `AGENTTEST_LLM_API_KEY`，而**镜像层里删掉的文件依然留在历史层里**，必须在上下文阶段就挡掉。`.dsh-vision-router/`（本机调试截图，文件名还编码了本机绝对路径）同样排除，它不该出现在任何产物中。刻意**不排除** `README.md` / `LICENSE` / `pyproject.toml`：`pyproject.toml` 声明了 `readme = "README.md"`，将来若加 `pip install .`，缺这些文件会直接构建失败。
 
@@ -416,7 +427,7 @@ sequenceDiagram
 ├─ requirements-dev.txt  # 工程化依赖（在其之上叠加 pytest-cov / mypy / ruff / pip-audit / pre-commit）
 ├─ requirements.lock     # pip-tools 生成的完整锁文件
 ├─ pyproject.toml        # 打包元数据 + [tool.mypy] / [tool.ruff] / [tool.coverage.*]
-├─ .pre-commit-config.yaml / commitlint.config.js
+├─ .pre-commit-config.yaml / commitlint.config.mjs
 └─ README.md / CONTRIBUTING.md / CHANGELOG.md / CODEOWNERS
 ```
 

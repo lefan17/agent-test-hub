@@ -36,6 +36,9 @@ services:
     environment:
       AGENTTEST_ENV: dev
       AGENTTEST_DEMO_URL: http://127.0.0.1:5001
+      # 与 Dockerfile 的 ENV 一致；显式写在这里是为了让「容器内必须绑 0.0.0.0」
+      # 这件事在编排文件里也一眼可见（见 Dockerfile 中该变量的注释）。
+      AGENTTEST_BIND_HOST: 0.0.0.0
     ports:
       - "5001:5001"
     # 用标准库 urllib 探活，不依赖镜像里没有的 curl/wget

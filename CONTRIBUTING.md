@@ -71,7 +71,16 @@ fix(ci): 用 python -m pytest 替代裸 pytest，修复 CI 全线导入失败
 docs: 补充容器化说明与本机未验证项
 ```
 
-规则主体在 `commitlint.config.js`（Node 生态标准实现）。CI 上由 `wagoid/commitlint-github-action` 强制。
+规则主体在 `commitlint.config.mjs`（Node 生态标准实现；必须是 `.mjs`，该 action 不接受 `.js`）。CI 上由 `wagoid/commitlint-github-action` 强制。
+
+改这个文件后请务必本地跑一次：
+
+```bash
+node --check commitlint.config.mjs
+node -e "import('./commitlint.config.mjs').then(m => console.log(Object.keys(m.default.rules)))"
+```
+
+第一版用的是 `.js` 扩展名，且开头用了 6 行 `#` 注释（Python/shell 风格，**不是合法 JavaScript**），因此它从来没被任何 JS 解析器读过，CI 一上就红。教训：**给 JS 生态写的文件，必须用 JS 解析器验证过再提交**。
 
 参考最近的真实提交：`git log --oneline -20`。
 
@@ -92,7 +101,7 @@ python scripts/check_commit_msg.py --range "HEAD~3..HEAD"
 
 | 场景 | 走哪个 |
 | --- | --- |
-| 有 Node 的开发者本机 | `.husky/commit-msg` → `commitlint`（读 `commitlint.config.js`） |
+| 有 Node 的开发者本机 | `.husky/commit-msg` → `commitlint`（读 `commitlint.config.mjs`） |
 | 只有 Python 的机器 | `.pre-commit-config.yaml` 的 local hook → `scripts/check_commit_msg.py` |
 | CI（PR / push） | `commitlint` job（Node 标准工具）+ 同一份 Python 脚本复核，双保险 |
 
@@ -132,13 +141,15 @@ docker compose --profile test up --build --abort-on-container-exit tests
 
 改 `Dockerfile` / `docker-compose.yml` 时请务必**两个 profile 都实际构建一次**——CI 的 `container` job 会真的 `docker build` 并冒烟，本地只看语法是不够的。
 
+**容器里的绑定地址必须是 `0.0.0.0`**（`AGENTTEST_BIND_HOST`）：`demo_app/app.py` 默认绑 `127.0.0.1`，在容器里那是容器自身的回环，`-p 5001:5001` 的宿主侧会被 reset（`curl: (56) Recv failure: Connection reset by peer`），而容器日志仍显示 `Running on http://127.0.0.1:5001`，极具误导性。默认值刻意保持不变，只在 `Dockerfile` 与 `docker-compose.yml` 里注入覆盖，所以本机开发行为不受影响。
+
 ---
 
 ## 7. 要动代码之前，先知道这几条铁律
 
 1. **不改业务逻辑**：`demo_app/` 的 9 个注入缺陷是**被测对象**，不是 bug。想「顺手修好」会直接让 15 条 xfail 基准集体 XPASS 失败——那是故意的警报，不是可以忽略的噪音。
 2. **不改既有测试的断言**：`tests/**` 的断言是回归网。要改测试，请在 PR 里说明**为什么原断言是错的**。
-3. **覆盖率门槛不许为了让 PR 变绿而下调**：`--cov-fail-under` 的值来自实测（语句覆盖 76% / 分支覆盖 73.44%），门槛取 70。它拦住的是「整块模块失去覆盖」，不是「少写一行测试」。
+3. **覆盖率门槛不许为了让 PR 变绿而下调**：`--cov-fail-under` 的值来自实测（语句覆盖 76% / 分支覆盖 73.46%），门槛取 70。它拦住的是「整块模块失去覆盖」，不是「少写一行测试」。
 4. **不让测试变绿的手段是补齐测试**，不是加 `@pytest.mark.skip`、不是 `# type: ignore` 糊 mypy、不是删用例。
 
 ### 关于 15 条 xfail

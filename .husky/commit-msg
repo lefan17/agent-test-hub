@@ -2,9 +2,11 @@
 #
 # husky 的 commit-msg 钩子：调用 commitlint 校验提交信息。
 #
-# 注意：本机（沙箱）无法执行 —— 沙箱拒绝 npm install，`node_modules/` 从未生成，
-# 因此 `npx commitlint --edit "$1"` 在本机跑不通（会提示找不到包）。
-# CI 里由 lint job 的 commitlint 步骤覆盖同一份规则。
+# 注意：本机（沙箱）无法执行 —— 即便 npm install 走代理已成功装出 node_modules，
+# commitlint CLI 仍会 spawn `git` 读取提交信息，而沙箱的命名管道限制让
+# spawn 直接报 `Error: spawn EPERM`（沙箱边界，非配置问题）。
+# 因此本钩子从未真实触发；CI 里由 commit-msg job 的 commitlint 步骤覆盖同一份规则。
+# commitlint 读的是仓库根的 commitlint.config.mjs（必须是 .mjs）。
 #
 # 为什么还留一份 Python 实现（scripts/check_commit_msg.py）：
 # 它零依赖，不需要 npm install 就能做同样的校验，

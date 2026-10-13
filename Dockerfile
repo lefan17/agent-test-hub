@@ -40,8 +40,16 @@ RUN python -m pip install --upgrade pip \
 COPY . .
 
 # 被测系统（demo_app）监听端口；须与 AGENTTEST_DEMO_URL 的默认端口一致
+#
+# ⚠️ AGENTTEST_BIND_HOST=0.0.0.0 是容器路径的必需项，不是可选优化：
+#    demo_app/app.py 默认绑 127.0.0.1（容器内的回环），此时宿主侧
+#    `-p 5001:5001` 转发进来的连接会被容器网络栈直接 reset，
+#    表现为 `curl: (56) Recv failure: Connection reset by peer`。
+#    这一条只在镜像里设置，本机 `python -m demo_app.app` 仍走 app.py 的
+#    默认值 127.0.0.1 —— 容器外行为一个字节都没变。
 ENV AGENTTEST_DEMO_URL=http://127.0.0.1:5001 \
-    AGENTTEST_ENV=dev
+    AGENTTEST_ENV=dev \
+    AGENTTEST_BIND_HOST=0.0.0.0
 EXPOSE 5001
 
 # 默认入口：启动被测系统。用 `-m` 而非 `python demo_app/app.py`，

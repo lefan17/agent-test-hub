@@ -13,6 +13,7 @@ RAG 检索链路（demo_app/rag.py）另注入 6 个缺陷，见该模块 RAG_BU
 """
 from __future__ import annotations
 
+import os
 import random
 import threading
 from datetime import datetime, timezone
@@ -303,4 +304,13 @@ def create_app() -> Flask:
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5001, debug=False, use_reloader=False)
+    # 绑定地址可被 AGENTTEST_BIND_HOST 覆盖，默认 127.0.0.1（与改动前完全一致）。
+    # 容器里必须传 0.0.0.0：绑定回环地址时 `-p 5001:5001` 的宿主侧会连不上，
+    # 表现为 curl: (56) Recv failure: Connection reset by peer。
+    # 仅容器路径需要覆盖，本机 `python -m demo_app.app` 行为一字不变。
+    app.run(
+        host=os.getenv("AGENTTEST_BIND_HOST", "127.0.0.1"),
+        port=5001,
+        debug=False,
+        use_reloader=False,
+    )
