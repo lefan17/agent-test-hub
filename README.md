@@ -30,8 +30,8 @@
 ## 测试套件
 
 ```bash
-.venv/Scripts/python.exe -m pytest -q            # 115 passed, 15 xfailed, 4 failed
-.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 115 passed, 15 xfailed, 0 failed
+.venv/Scripts/python.exe -m pytest -q            # 121 passed, 15 xfailed, 4 failed
+.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 121 passed, 15 xfailed, 0 failed
 ```
 
 | 文件 | 条数 | 覆盖 |
@@ -40,7 +40,7 @@
 | `tests/test_rag_engine.py` | 38 | BM25 后端、中文分词、排序/去重/索引不变量、检索指标纯函数、标注集指标复现、embedding 降级 |
 | `tests/test_rag_tool.py` | 26（18 passed + 8 xfail） | RAG 工具层 + 端点契约缺陷基准（空 q / 非法 top_k / 超长 q 应 400） |
 | `tests/test_rag_sut.py` | 30（25 passed + 5 xfail） | RAG 端点功能、语料增删改（含覆盖写入）、索引一致性、并发读写、缺陷复现 + 正确实现对照组 |
-| `tests/test_checks.py` | 10 | executor 断言求值层：API 双断言、rag_status、未实现断言必须失败、指数退避 |
+| `tests/test_checks.py` | 16 | executor 断言求值层：API 双断言、rag_status、未实现断言必须失败（RAG/API/UI 三处）、指数退避 |
 | `tests/test_api_tool.py` | 4 | 接口工具集成 |
 | `tests/test_mock_brain.py` | 5 | 规划与归因 |
 | `tests/test_report.py` | 1 | 报告渲染 |
@@ -208,6 +208,8 @@ export AGENTTEST_LLM_MODEL=deepseek-chat
 
 Agent 侧新增的 RAG 断言类型：`rag_hits_include` / `rag_rank_monotonic` / `rag_tie_by_doc_id` / `rag_no_duplicate` / `rag_recall_at_least` / `rag_mrr_at_least` / `rag_no_ghost_hit` / `rag_status`，由 `agenttest/graph/nodes.py` 的 RAG 分派分支求值；`Defect.category` 新增 `relevance` 取值承载检索质量类归因。
 
+三条求值路径（RAG / API / UI）遵循同一条口径：**未实现的 `check.type` 一律判失败，不得静默跳过**。RAG 由 `_eval_rag_check` 末尾兜底返回 `ok=False`；API 由 `_eval_api_check` 兜底返回 `ok=False`；UI 由 `agenttest/tools/ui_tool.py` 两个后端分支的 `else` 分支各追加一条 `ok=False` 的 result（否则 `all([])` 恒为 `True`，会让挂了未识别断言的用例假绿）。
+
 ## 工作原理
 
 ### LangGraph 四节点流水线
@@ -247,7 +249,7 @@ sequenceDiagram
 │  ├─ report/            # HTML 报告渲染
 │  ├─ config.py / models.py / runner.py
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（115 通过 + 15 项缺陷基准 xfail；另有 4 条 UI 用例本机因无 Chrome 失败）
+├─ tests/                # 项目自身 pytest（121 通过 + 15 项缺陷基准 xfail；另有 4 条 UI 用例本机因无 Chrome 失败）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示
 ├─ reports/              # 运行产物（HTML/JSON 报告 + 截图）

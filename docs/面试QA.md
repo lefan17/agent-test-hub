@@ -59,7 +59,7 @@ OpenAI 兼容接口抽象（base_url + model + api_key），DeepSeek/OpenAI/通�
 零驱动、零下载、离线可用、对 CI 友好；Selenium 作为可选后端保留，体现对不同场景的取舍判断。
 
 **Q19：项目怎么验证自己是对的？**
-134 项 pytest：被测系统功能测试（含 15 项缺陷基准 xfail：API 与 RAG 检索缺陷面）、MockBrain 规划/归因单测、工具集成测试（api_request / rag_search / rag_evaluate）、BM25 后端与检索指标纯函数单测、executor 断言求值层单测（API 双断言 / rag_status / 未实现断言必须失败 / 指数退避 / 并发锁）、报告渲染测试、端到端测试（断言必须发现 contract+bug 两类缺陷）。本机实测 115 passed + 15 xfailed；另有 4 条 UI 用例需要 Chrome，无浏览器环境失败（已知环境限制）。
+140 项 pytest：被测系统功能测试（含 15 项缺陷基准 xfail：API 与 RAG 检索缺陷面）、MockBrain 规划/归因单测、工具集成测试（api_request / rag_search / rag_evaluate）、BM25 后端与检索指标纯函数单测、executor 断言求值层单测（API 双断言 / rag_status / 未实现断言必须失败（RAG、API、UI 三条求值路径）/ 指数退避 / 并发锁）、报告渲染测试、端到端测试（断言必须发现 contract+bug 两类缺陷）。本机实测 121 passed + 15 xfailed；另有 4 条 UI 用例需要 Chrome，无浏览器环境失败（已知环境限制）。
 
 **Q20：RAG 检索链路怎么测？**
 三层断言，而不是只看 HTTP 200：

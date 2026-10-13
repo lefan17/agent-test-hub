@@ -1,14 +1,15 @@
-"""executor 的断言求值层单测：API 双断言、RAG 断言分派、重试退避。
+"""executor 的断言求值层单测：API 双断言、UI 断言、RAG 断言分派、重试退避。
 
 这些用例守住三类「假绿」：
-- 未实现的 check.type 必须判失败（旧实现末尾兜底 ok=True，漏写分支会静默通过）；
+- 未实现的 check.type 必须判失败（RAG/API/UI 三处都不能静默跳过，否则 all([]) 恒真）；
 - API 用例不能只看状态码，`case.checks` 非空时必须校验响应体；
 - 重试退避必须是指数而非线性（文档宣称指数退避）。
 """
 from __future__ import annotations
 
+import sys
 import threading
-import time
+import types
 import typing
 
 import pytest
@@ -67,6 +68,119 @@ def test_every_declared_rag_check_type_has_an_implementation():
     assert dispatched, "rag_no_ghost_hit 必须仍由用例分派层处理"
 
 
+# ---------- UI 断言：未实现的类型不得静默跳过 ----------
+
+FAKE_DOM = "<html><head><title>AgentTest Demo</title></head><body><h1>AgentTest Demo</h1></body></html>"
+
+
+def _chrome_backend(monkeypatch):
+    """让 ui_check 走 chrome 分支但不必真的启动浏览器（本机 Chrome 不可用）。"""
+    from agenttest.tools import ui_tool
+
+    monkeypatch.setattr(ui_tool, "_chrome_dump_dom", lambda chrome_path, url: FAKE_DOM)
+    monkeypatch.setattr(ui_tool, "_chrome_screenshot", lambda *a, **kw: None)
+    return ui_tool
+
+
+def test_ui_check_unknown_check_type_fails(monkeypatch):
+    """UI 用例挂未识别断言类型时，results 必须有一条 ok=False，整组判定为失败。
+
+    旧实现里未识别的类型不追加任何 result，`all(r["ok"] for r in [])` 恒为 True。
+    """
+    ui_tool = _chrome_backend(monkeypatch)
+    unknown = Check.model_construct(type="rag_no_duplicate", target="", doc_ids=[], threshold=0.0)
+    detail = ui_tool.ui_check("http://127.0.0.1:1/", [unknown], backend="chrome",
+                              chrome_path=sys.executable)
+    assert detail["ok"] is False
+    assert len(detail["results"]) == 1
+    assert detail["results"][0]["ok"] is False
+    assert "未实现" in detail["results"][0]["detail"]
+
+
+def test_ui_check_known_types_still_pass(monkeypatch):
+    """回归：已实现的三种类型行为不变，不因新增 else 分支而误判。"""
+    ui_tool = _chrome_backend(monkeypatch)
+    checks = [Check(type="contains_text", target="AgentTest Demo"),
+              Check(type="title_contains", target="AgentTest"),
+              Check(type="has_element", target="h1")]
+    detail = ui_tool.ui_check("http://127.0.0.1:1/", checks, backend="chrome",
+                              chrome_path=sys.executable)
+    assert detail["ok"] is True
+    assert [r["ok"] for r in detail["results"]] == [True, True, True]
+
+
+def test_ui_case_with_unknown_check_type_is_not_ok(monkeypatch, tmp_path):
+    """端到端一层：executor 的 _run_ui_case 必须把该用例判失败。"""
+    _chrome_backend(monkeypatch)
+    case = TestCase(id="UI-T", title="t", kind="ui", url="/",
+                    checks=[Check.model_construct(type="rag_no_duplicate", target="",
+                                                  doc_ids=[], threshold=0.0)])
+    detail = nodes._run_ui_case(case, "http://127.0.0.1:1", tmp_path,
+                                Config(ui_backend="chrome", chrome_path=sys.executable))
+    assert detail["ok"] is False
+    assert "未实现" in detail["error"]
+
+
+def test_selenium_backend_unknown_check_type_fails(monkeypatch):
+    """selenium 分支（ui_tool.py 的另一个循环）同样不得静默跳过。"""
+    from agenttest.tools import ui_tool
+
+    class _El:
+        text = "hello"
+
+    class _Driver:
+        title = "T"
+
+        def set_page_load_timeout(self, t):
+            pass
+
+        def get(self, url):
+            pass
+
+        def find_element(self, by, sel):
+            return _El()
+
+        def find_elements(self, by, sel):
+            return [_El()]
+
+        def save_screenshot(self, p):
+            pass
+
+        def quit(self):
+            pass
+
+    class _Options:
+        def add_argument(self, a):
+            pass
+
+    class _By:
+        TAG_NAME = "tag"
+        CSS_SELECTOR = "css"
+
+    def _mod(name, **attrs):
+        m = types.ModuleType(name)
+        for k, v in attrs.items():
+            setattr(m, k, v)
+        monkeypatch.setitem(sys.modules, name, m)
+        return m
+
+    _mod("selenium")
+    _mod("selenium.webdriver", Chrome=lambda options=None: _Driver())
+    _mod("selenium.webdriver.chrome")
+    _mod("selenium.webdriver.chrome.options", Options=_Options)
+    _mod("selenium.webdriver.common")
+    _mod("selenium.webdriver.common.by", By=_By)
+
+    unknown = Check.model_construct(type="rag_no_duplicate", target="", doc_ids=[], threshold=0.0)
+    detail = ui_tool._selenium_check("http://127.0.0.1:1/", [unknown], None)
+    assert detail["ok"] is False
+    assert "未实现" in detail["results"][0]["detail"]
+    # 回归：已实现类型不受影响
+    ok_detail = ui_tool._selenium_check("http://127.0.0.1:1/",
+                                       [Check(type="contains_text", target="hello")], None)
+    assert ok_detail["ok"] is True
+
+
 # ---------- API 用例双断言 ----------
 
 def test_api_case_fails_when_body_lacks_expected_text(demo_server_url):
@@ -92,6 +206,21 @@ def test_api_case_without_checks_still_asserts_status_only(demo_server_url):
     """既有 15 条 MockBrain API 用例都不带 checks，行为必须与改动前一致。"""
     assert nodes._run_api_case(_api_case(200, []), demo_server_url)["ok"] is True
     assert nodes._run_api_case(_api_case(500, []), demo_server_url)["ok"] is False
+
+
+def test_api_check_unknown_type_fails():
+    """_eval_api_check 对未实现类型同样必须判失败（不得返回恒真）。"""
+    unknown = Check.model_construct(type="rag_no_duplicate", target="", doc_ids=[], threshold=0.0)
+    verdict = nodes._eval_api_check(unknown, {"status": "ok"})
+    assert verdict["ok"] is False
+    assert "不支持" in verdict["detail"] or "未实现" in verdict["detail"]
+
+
+def test_api_case_with_unknown_check_type_is_not_ok(demo_server_url):
+    """端到端：状态码正确但挂了未实现断言类型的 API 用例不得被判通过。"""
+    unknown = Check.model_construct(type="rag_no_duplicate", target="", doc_ids=[], threshold=0.0)
+    detail = nodes._run_api_case(_api_case(200, [unknown]), demo_server_url)
+    assert detail["ok"] is False
 
 
 # ---------- 重试退避 ----------

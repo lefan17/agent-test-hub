@@ -90,6 +90,10 @@ def _selenium_check(url: str, checks: List[Check], screenshot_path: Optional[Pat
             elif c.type == "title_contains":
                 ok = c.target in driver.title
                 results.append({"type": c.type, "target": c.target, "ok": ok, "detail": f"标题: {driver.title}"})
+            else:
+                # 未实现的断言类型必须判失败：静默跳过会让 all([]) / 全 True 组合出假绿
+                results.append({"type": c.type, "target": c.target, "ok": False,
+                                "detail": f"未实现的断言类型 {c.type}（UI 后端未支持，按失败处理）"})
         if screenshot_path:
             driver.save_screenshot(str(screenshot_path))
         return {"ok": all(r["ok"] for r in results), "results": results, "screenshot": str(screenshot_path) if screenshot_path and screenshot_path.exists() else None}
@@ -130,6 +134,10 @@ def ui_check(
                     title = soup.title.string if soup.title else ""
                     ok = c.target in (title or "")
                     results.append({"type": c.type, "target": c.target, "ok": ok, "detail": f"标题: {title}"})
+                else:
+                    # 未实现的断言类型必须判失败：静默跳过会让 all([]) 组合出假绿
+                    results.append({"type": c.type, "target": c.target, "ok": False,
+                                    "detail": f"未实现的断言类型 {c.type}（UI 后端未支持，按失败处理）"})
             shot = None
             if screenshot_path:
                 shot = _chrome_screenshot(found_chrome, url, screenshot_path)
