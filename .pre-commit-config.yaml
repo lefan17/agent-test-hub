@@ -1,0 +1,76 @@
+# pre-commit 配置
+#
+# 本机无法执行：沙箱拒绝创建 venv（ensurepip PermissionError: [WinError 5]），
+# 因此 `pre-commit install` / `pre-commit run --all-files` 在本机从未跑通，
+# 只能用 `yaml.safe_load` 做静态语法校验。CI 里由 lint job 承担等价检查。
+#
+# hooks 只用「CI 里已经出现过的工具」（ruff / 基础文件检查）+ 本仓库自带的
+# scripts/check_commit_msg.py（提交信息规范，见第 8 项：为什么不用 commitlint）。
+# 刻意不引入需要额外网络或重型环境的 hook（如 eslint / docker-build）。
+
+default_language_version:
+  python: python3.12
+
+repos:
+  # ---------- 基础文件卫生（pre-commit 官方维护，无需额外依赖） ----------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: mixed-line-ending
+        args: ["--fix=lf"]        # 与 .gitattributes 的 `* text=auto eol=lf` 一致
+
+  # ---------- Ruff：与 CI lint job 同一个工具、同一份 [tool.ruff] 配置 ----------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      # 刻意**不挂 ruff-format**：实测 `ruff format --check .` 显示
+      # 「35 files would be reformatted, 11 files already formatted」。
+      # 挂上它，任何人 commit 一次就会被迫格式化 35 个文件（绝大多数是
+      # agenttest/ 与 demo_app/ 的业务代码），这次交付的边界是「只动工程化外壳」，
+      # 因此格式化留作独立任务（见 CHANGELOG 的 Unreleased 段）。
+      # CI 同样只跑 `ruff check`，不跑 `ruff format --check`，两端口径一致。
+
+  # ---------- mypy：与 CI lint job 同一条命令、同一份 [tool.mypy] 配置 ----------
+  #
+  # rev 用 v1.15.0（该 mirror 的已发布 tag）。本机 .venv 里装的是 mypy 2.4.0，
+  # 两者版本号不一致是**预期内**的：pre-commit 的 hook 跑在它自己创建的
+  # 隔离环境里，与 .venv 无关；只要 [tool.mypy] 的配置项在两边都存在，
+  # 结论就一致。CI 的 lint job 用的是 requirements-dev.txt 里钉住的版本，
+  # 那才是「权威口径」。hook 版本落后于 .venv 不构成正确性问题。
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        files: ^(agenttest|demo_app)/
+        args: ["agenttest", "demo_app"]
+        additional_dependencies:
+          - flask==3.1.3
+          - requests==2.34.2
+          - beautifulsoup4==4.15.0
+          - selenium==4.51.0
+          - types-requests
+        pass_filenames: false
+
+  # ---------- 提交信息规范 ----------
+  #
+  # 本机无 pre-commit，且 commitlint 需要 Node + npm install（CI 里另有 commitlint job）。
+  # 这里用一个零依赖的 Python 本地 hook 做同一件事，理由见 CONTRIBUTING.md。
+  - repo: local
+    hooks:
+      - id: commit-msg-conventional
+        name: 提交信息遵循 Conventional Commits
+        entry: python scripts/check_commit_msg.py
+        language: system
+        stages: [commit-msg]
+        always_run: true
+        pass_filenames: true

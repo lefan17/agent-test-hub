@@ -1,0 +1,94 @@
+# =============================================================================
+# Docker 构建上下文排除清单
+# =============================================================================
+#
+# 为什么需要它：`docker build` 默认把整个目录（含 .git/ 与 .venv/）打包发给
+# daemon。本仓库的 .venv 有数百 MB、.git 有完整历史，两者都会让每次构建白白
+# 多传几十上百 MB；而且 Dockerfile 末层是 `COPY . .`，不排除就会让任何一个
+# 缓存文件或一次测试运行的产物击穿这一层缓存。
+#
+# ⚠️ 未验证声明：开发沙箱的 Docker daemon 起不来（WSL E_ACCESSDENIED），
+#    本文件**没有**在真实 `docker build` 上观测过上下文大小变化，只做了内容
+#    核对 + `docker compose config --quiet` 静态校验。真实构建由 CI 的
+#    container job 承担。
+#
+# 写法说明：
+#   1. Docker 不支持行内注释（`path  # 说明` 会把注释当成路径的一部分），
+#      所以每条排除项单独占一行，说明写在它上方。
+#   2. Docker 的匹配是整路径匹配，`*.pyc` 只命中根目录的同名文件；
+#      要命中任意层级必须写 `**/*.pyc`。下面统一用 `**/` 前缀。
+#   3. 这里**不排除** README.md / LICENSE / pyproject.toml 等打包元数据：
+#      pyproject.toml 里写了 `readme = "README.md"`，将来若给 Dockerfile 加
+#      `pip install .`，少了这些文件构建会直接失败。省几十 KB 不值得埋这个雷。
+# =============================================================================
+
+# ---------- 版本控制：构建上下文不需要完整历史 ----------
+.git/
+.gitignore
+.gitattributes
+
+# ---------- 虚拟环境：依赖由 Dockerfile 的 pip install 提供，不靠复制 ----------
+.venv/
+venv/
+
+# ---------- Python 字节码与构建缓存 ----------
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+build/
+dist/
+
+# ---------- 测试与检查工具的缓存 ----------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# ---------- 运行产物 ----------
+reports/
+logs/
+demo_screenshots/
+
+# ---------- 本机临时/调试残留 ----------
+.tmp/
+.pkgs/
+_whl/
+_shim/
+**/*.log
+debug.log
+_pipdbg.txt
+
+# ---------- 本机专用工具产物 ----------
+# .dsh-vision-router/ 里是本机调试截图（文件名还编码了本机绝对路径），
+# 既不该进镜像，也绝不该出现在任何交付产物里。
+.dsh-vision-router/
+
+# ---------- 机密与本地配置 ----------
+# .env 可能含 AGENTTEST_LLM_API_KEY。镜像层里删掉的文件依然留在历史层里，
+# 是典型的泄密路径，所以必须在上下文阶段就挡掉。
+.env
+.env.*
+!.env.example
+
+# ---------- IDE / 编辑器 ----------
+.idea/
+.vscode/
+**/*.swp
+
+# ---------- Node（commitlint / husky 的本地依赖，镜像里用不到）----------
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# ---------- 安全扫描产物 ----------
+pip-audit-report.md
+
+# ---------- CI 与 Git 协作配置（不参与运行，也不参与测试）----------
+.github/
+.husky/
+CODEOWNERS
+CONTRIBUTING.md
+CHANGELOG.md

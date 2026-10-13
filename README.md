@@ -8,7 +8,11 @@
 >
 > 🧪 **配套实践项目**：[software-testing-practice](https://github.com/lefan17/software-testing-practice) —— 契约驱动的接口自动化测试实践：Flask 被测系统 + 27 条登录接口 pytest 用例 + 用例设计/测试报告/SQL 数据校验文档（测试基本功配套仓库）
 >
-> ✅ **CI**：[![AgentTest Hub CI](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml/badge.svg)](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml) —— `push` / `pull_request` / `workflow_dispatch`，见 `.github/workflows/test.yml`
+> ✅ **CI**：[![AgentTest Hub CI](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml/badge.svg)](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml) —— 6 个 job（测试+覆盖率门槛 / mypy+ruff / 容器构建冒烟 / 依赖漏洞扫描 / 提交规范 / 失败通知），触发于 `push` / `pull_request` / 每周夜间回归 `schedule` / `workflow_dispatch`，见 `.github/workflows/test.yml`
+>
+> 🐳 **容器化**：`docker compose --profile app up`（起被测系统）/ `--profile test up`（跑测试+覆盖率门槛）
+>
+> 🤝 **协作规范**：见 [CONTRIBUTING.md](CONTRIBUTING.md) · 变更记录见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 为什么这个项目能同时投两个岗位
 
@@ -28,13 +32,99 @@
 - **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、证据与截图
 - **自带被测系统**：Flask Demo 应用注入 2 个 API 契约缺陷 + 1 处 Flaky 注入 + 6 个 RAG 检索缺陷开关（覆盖 9 个缺陷面），Agent 演示「发现缺陷」而非「跑一遍全绿」
 - **零新增依赖**：RAG 检索默认后端用纯标准库实现 BM25（`demo_app/rag.py`），不引入 rank_bm25 / jieba / numpy 等任何检索库，离线确定性可回归
+- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率门槛（实测分支覆盖 73.44% / 门槛 70%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
+
+## 工程化能力
+
+> 这一节是**面试可追问**的部分：每一项都给出「怎么用」与「为什么这么做」，以及**哪些尚未在本机验证**。
+
+| 能力 | 落地位置 | 怎么用 |
+| --- | --- | --- |
+| 容器化 | `Dockerfile`、`docker-compose.yml` | `docker compose --profile app up --build` / `--profile test up --build` |
+| 覆盖率门槛 | `pyproject.toml [tool.coverage.*]`、CI `test` job | `--cov=agenttest --cov=demo_app --cov-fail-under=70` |
+| 静态类型 | `pyproject.toml [tool.mypy]`、CI `lint` job | `python -m mypy` → `Success: no issues found in 24 source files` |
+| 代码规范 | `pyproject.toml [tool.ruff]`、CI `lint` job、pre-commit | `python -m ruff check .` → `All checks passed!` |
+| 漏洞扫描 | `.github/dependabot.yml`、CI `security` job | `pip-audit -r requirements.lock`（**非阻塞**，理由见下） |
+| 依赖锁文件 | `requirements.lock`（pip-tools 生成）、CI 校验步骤 | `python -m piptools compile requirements.txt -o requirements.lock` |
+| 依赖分层 | `requirements.txt`（运行）/ `requirements-dev.txt`（工程化） | 镜像用 `ARG INSTALL_DEV=0/1` 切换 |
+| 本地钩子 | `.pre-commit-config.yaml` | `python -m pre-commit run --all-files` |
+| 提交规范 | `commitlint.config.js`、`.husky/commit-msg`、`scripts/check_commit_msg.py` | 见 [CONTRIBUTING.md](CONTRIBUTING.md#3-提交信息规范conventional-commits) |
+| 协作模板 | `.github/PULL_REQUEST_TEMPLATE.md`、`.github/ISSUE_TEMPLATE/`、`CODEOWNERS` | 开 PR / issue 时自动带出 |
+| 环境分层 | `scripts/env/{dev,staging,prod}.env`、`agenttest/config.py` | `AGENTTEST_ENV=staging python -m agenttest run` |
+| CI 定时与并发 | `.github/workflows/test.yml` `on.schedule` / `concurrency` | 每周日 19:00 UTC 夜间回归；同 ref 自动取消旧运行 |
+| CI 失败通知 | CI `notify` job | **零 secret**：写 step summary + 用内置 `GITHUB_TOKEN` 自动开 issue |
+
+### 覆盖率
+
+实测命令与结果（本机 `.venv`，Python 3.12.10）：
+
+```bash
+# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1378 stmts / 330 miss / 354 branch = 73.44%
+.venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
+    --cov=agenttest --cov=demo_app --cov-report=term-missing
+
+# 对照：关掉分支覆盖（临时 --cov-config）→ TOTAL 1380 stmts / 331 miss = 76%
+# 分支覆盖默认比语句覆盖低约 2.5 个百分点，换来的信息量更大，因此默认开着。
+```
+
+**CI 门槛取 70**，理由：低于两条实测口径（语句覆盖 76% / 分支覆盖 73.44%），留约 3.4 个百分点的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么，按当前总数（1378 语句 + 354 分支，分子 ≈1272）反推如下——**实测口径，不是估算**：
+
+| 假设的退化 | 反推覆盖率 | 是否击穿 70 |
+| --- | --- | --- |
+| `agenttest/graph/nodes.py` 整体失去覆盖 | 69.8% | ✅ 拦得住 |
+| `demo_app/rag.py`（264 行）整体失去覆盖 | 71.0% | ❌ 拦不住 |
+| `demo_app/app.py`（179 行）整体失去覆盖 | 71.2% | ❌ 拦不住 |
+
+**诚实结论：70 这个门槛只能拦住「大模块 + 大丢失」的组合，拦不住单个中等模块的完全失守。** 之所以不往上抬到 75：那会把门槛压到实测值（73.44%）之上，CI 首次运行就是红的，只能靠删测试或写无意义测试来凑，属于自欺。真正能拦住单模块退化的手段是**每文件门槛**（`[tool.coverage.report]` 的 per-file `fail_under`，或 Codecov 的 patch coverage），本仓库尚未启用，已记入 CHANGELOG 的 Unreleased 段作为后续任务。
+
+覆盖率短板（`--cov-report=term-missing` 实测，按缺失语句数排序）：
+
+| 文件 | 覆盖 | 未覆盖的原因 |
+| --- | --- | --- |
+| `agenttest/runner.py` | **0%**（122 行全未覆盖） | CLI 入口与退出路径。测试套件直接调用 `build_context()`/图节点，不 fork 子进程跑 CLI |
+| `agenttest/config.py` | 40% | 环境分层的档案读取与 `pick_int` 异常分支：既有测试不设置 `AGENTTEST_ENV`/`AGENTTEST_MAX_ATTEMPTS`，走不到 |
+| `agenttest/tools/spec_tool.py` | 18% | 需要真实 HTTP 拉取 `/openapi.json`；端到端用例只覆盖了它的一部分 |
+| `agenttest/brain/llm_brain.py` | 43% | LLM 联网分支，无 API Key 时根本不进入（这是设计上的降级路径，不是遗漏） |
+| `agenttest/tools/ui_tool.py` | 71% | Chrome 无头 / Selenium 分支，本机无 Chrome 时走不到 |
+
+其余模块普遍 80%~100%（`models.py`、`rag_metrics.py`、`graph/*` 均接近满分）。`agenttest/__main__.py` 是 3 行 CLI 薄壳，已在 `[tool.coverage.run] omit` 中排除——单独跑它没有断言价值。
+
+上面这几处都属于「需要外部条件（CLI 子进程 / 特定环境变量 / 联网 / 真实浏览器）才能覆盖」，是**已知缺口而非遗漏**，也正是门槛取 70 而不是 90 的原因：把门槛定到实际够不到的位置，只会逼出「为凑数字而写无意义测试」。
+
+### 为什么 pip-audit 是非阻塞的
+
+它查的是**外部漏洞库**，不是本仓库的代码质量。同一条正确无误的提交，可能今天全绿、明天因为某个依赖被披露新 CVE 而变红；设成阻塞会让「与本次改动无关的失败」卡住所有人的 PR。所以：结果照跑、照进日志与 step summary 与 artifact，但不阻断；真正需要强迫升级时由 Dependabot 自动开 PR。
+
+### ⚠️ 本机未验证项（诚实声明）
+
+| 项 | 状态 | 原因 |
+| --- | --- | --- |
+| `docker build` / `docker run` | **未验证** | 本机 Docker daemon 无法启动（WSL `E_ACCESSDENIED`）。`Dockerfile` 与 `docker-compose.yml` **只通过 `docker compose --profile '*' config --quiet` 静态校验（EXIT=0）**，从未真实构建或运行。真实构建与冒烟由 CI 的 `container` job 承担。 |
+| `pip-audit` | **未验证** | 需创建临时虚拟环境，沙箱拒绝 `ensurepip`（`PermissionError: [WinError 5]`）；且它把缓存写死在 `%LOCALAPPDATA%\pip-audit`，`--cache-dir` 也绕不过。仅在 CI 的 `security` job 里被真实验证。配置已就位，本地从未跑通。 |
+| `pre-commit` | **未验证** | 同上（hook 需要独立虚拟环境）。配置仅通过 `yaml.safe_load` 静态语法校验；等价检查由 CI 的 `lint` job 承担。 |
+| `commitlint` / husky 钩子 | **未验证** | 本机无 `node_modules`（沙箱拒绝 `npm install`），`.husky/commit-msg` 从未真实触发。CI 的 `commit-msg` job 覆盖同一份规则，另有零依赖的 Python 实现可本地跑。 |
+| `requirements-dev.txt` 钉的两个版本 | **无法核对** | `pre-commit==4.3.0` 与 `commitizen==4.9.1` **本机从未安装过**（沙箱拒绝建 venv），版本号无法核对。其余六个包（pytest-cov / coverage / ruff / mypy / pip-audit / pip-tools）已用 `importlib.metadata` + `pip show` 双口径实测，**与钉版逐条一致**（详见该文件顶部核对表）。另：本机这三个包是从同机另一个 3.12 venv 复制到 `site-packages` 的，不是 `pip install` 进来的——「覆盖率 73.44%」「ruff 全绿」是真跑出来的，但 CI 能否解析安装这些版本号，只能等 CI 首次运行。 |
+
 
 ## 测试套件
 
+采集数 **140**（不含 UI 时 136 = 121 passed + 15 xfailed；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（PowerShell 7 / Python 3.12.10）：
+
 ```bash
+# 全量（含 UI）：本机无 Chrome → 4 failed
 .venv/Scripts/python.exe -m pytest -q            # 121 passed, 15 xfailed, 4 failed
+
+# 不含 UI：CI 的阻塞口径
 .venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 121 passed, 15 xfailed, 0 failed
+
+# 带覆盖率门槛（CI test job 同一条命令）
+.venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
+    --cov=agenttest --cov=demo_app --cov-report=term-missing --cov-fail-under=70
+#   → 121 passed, 15 xfailed, 1 warning；TOTAL 1378 stmts / 330 miss / 354 branch = 73.44%
+#   → Required test coverage of 70.0% reached.
 ```
+
+> `-o addopts=` 不能省：`pyproject.toml` 里 `addopts = "-q"`，而 `-q` 会把末尾的 `121 passed, ...` 汇总行一起吞掉；命令行覆盖为空之后计数才会出现在输出与 CI 日志里。
 
 | 文件 | 条数 | 覆盖 |
 | --- | --- | --- |
@@ -95,8 +185,12 @@ scripts\demo.bat
 
 ```bash
 python -m venv .venv
+# 只跑被测系统 → 装运行依赖即可
 .venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
 # .venv/bin/python -m pip install -r requirements.txt          # Linux/macOS
+
+# 要跑测试 / 覆盖率 / mypy / ruff → 装工程化依赖（它已用 -r 引用上面那份）
+.venv/Scripts/python.exe -m pip install -r requirements-dev.txt
 
 .venv/Scripts/python.exe -m agenttest run
 ```
@@ -118,9 +212,67 @@ python -m venv .venv
 # 运行项目自身的测试套件（展示测试功底）
 .venv/Scripts/python.exe -m pytest
 
+# 带覆盖率门槛（CI test job 的同一条命令）
+.venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
+    --cov=agenttest --cov=demo_app --cov-report=term-missing --cov-fail-under=70
+
+# 静态检查（与 CI lint job 完全一致）
+.venv/Scripts/python.exe -m mypy            # 需先 pip install -r requirements-dev.txt
+.venv/Scripts/python.exe -m ruff check .
+
+# 切到 staging 配置档案（被测系统指向 5002、UI 后端固定 selenium、报告写 reports/staging）
+AGENTTEST_ENV=staging .venv/Scripts/python.exe -m agenttest run
+
 # 只跑 RAG 检索链路相关测试
 .venv/Scripts/python.exe -m pytest tests/test_rag_engine.py tests/test_rag_tool.py tests/test_rag_sut.py
 ```
+
+## 环境分层（dev / staging / prod）
+
+`AGENTTEST_ENV` 选择一套配置档案，档案文件在 `scripts/env/<profile>.env`：
+
+| 档案 | 被测系统 | UI 后端 | 报告目录 | 说明 |
+| --- | --- | --- | --- | --- |
+| `dev`（默认） | `http://127.0.0.1:5001` | `auto` | `reports` | 本地开发，**取值与代码默认值逐条一致** |
+| `staging` | `http://127.0.0.1:5002` | `selenium` | `reports/staging` | 预发/联调，与 dev 实例并存不冲突 |
+| `prod` | 生产地址（占位） | `selenium` | `reports/prod` | 只读契约验证，重试收紧到 1 次，报告独立归档 |
+
+**取值优先级（从高到低）：真实环境变量（含 `.env`）> 档案文件 > 代码默认值。**
+
+关键设计：`scripts/env/dev.env` 的每个值都与 `agenttest/config.py` 的代码默认值一致，因此**不设置 `AGENTTEST_ENV`（也不设任何相关环境变量）时的行为，与引入环境分层之前完全相同**——已由既有 121 条测试回归确认。`AGENTTEST_ENV` 写成非法值会直接 `ValueError`（明确报错优于静默跑错环境），而不是悄悄回落到 dev。
+
+LLM Key 一律只写进 `.env` 或真实环境变量，**绝不写进档案文件**（档案文件是入库的，见 `scripts/env/prod.env` 顶部的说明）。
+
+## 容器化
+
+```bash
+# 静态校验（不需要 daemon，CI 的 container job 第一步就是它）
+# ⚠️ 必须带 --profile '*'：两个 service 都挂了 profiles，不带 profile 时
+#    config 会把它们全过滤掉，退化成 `services: {}` 却依然 EXIT=0。
+docker compose --profile '*' -f docker-compose.yml config --quiet
+
+# 路径一：只起被测系统 → http://127.0.0.1:5001
+docker compose --profile app up --build demo-app
+
+# 路径二：只跑项目测试套件（含覆盖率门槛，等价 CI 的 test job）
+docker compose --profile test up --build --abort-on-container-exit tests
+
+# 两条一起（测试会等 demo-app healthy 之后再启动）
+docker compose --profile app --profile test up --build
+```
+
+镜像基于 `python:3.12-slim`（与 CI 及本机 `.venv` 的 3.12 对齐，避免版本漂移）。`Dockerfile` 用 `ARG INSTALL_DEV` 区分两批依赖：`0` 只装 `requirements.txt`（起被测系统），`1` 额外装 `requirements-dev.txt`（跑测试与覆盖率）。依赖层与源码层分离，改代码不会让依赖层缓存失效。
+
+**构建上下文**由 `.dockerignore` 收窄：排除 `.git/`（完整历史）、`.venv/`（数百 MB）、`__pycache__/`、各类工具缓存、`reports/`、`.tmp/`，以及 `.env*`——后者可能含 `AGENTTEST_LLM_API_KEY`，而**镜像层里删掉的文件依然留在历史层里**，必须在上下文阶段就挡掉。`.dsh-vision-router/`（本机调试截图，文件名还编码了本机绝对路径）同样排除，它不该出现在任何产物中。刻意**不排除** `README.md` / `LICENSE` / `pyproject.toml`：`pyproject.toml` 声明了 `readme = "README.md"`，将来若加 `pip install .`，缺这些文件会直接构建失败。
+
+> ⚠️ `docker compose config --quiet` 只能校验**编排文件语法**，证明不了任何一层是否真的能装上、能不能跑起来——那是 `container` job 在 CI 上做的事。本地从未构建过镜像。
+
+**为什么必须 `python -m pytest` 而不是裸 `pytest`**：镜像里没有 `pip install -e .`，`demo_app/` 不在 `site-packages`。裸 `pytest` 不会把 WORKDIR 加进 `sys.path`，容器内会直接 `ModuleNotFoundError: No module named 'demo_app'`——与 CI 那条坑是同一回事。
+
+> ⚠️ **本机未验证**：本开发沙箱的 Docker daemon 无法启动（WSL `E_ACCESSDENIED`）。`Dockerfile` 与 `docker-compose.yml` **只做过 `docker compose --profile '*' config --quiet` 静态校验（EXIT=0），从未真实 `docker build` 或 `docker run`**。真实构建 + 探活冒烟由 CI 的 `container` job 承担（`docker/build-push-action` 构建两个镜像，运行镜像探 `/openapi.json`，测试镜像内跑测试套件）。
+>
+> 另需说明这条静态校验的**实际强度**：它只证明「YAML 语法合法 + 变量插值能求值 + service 定义结构正确」，**证明不了**镜像能不能装上依赖、容器能不能起来。而且不带 `--profile '*'` 时它会退化成校验 `services: {}`——同样 EXIT=0，属于假绿。
+
 
 ## 配置真实 LLM（可选）
 
@@ -249,13 +401,23 @@ sequenceDiagram
 │  ├─ graph/             # LangGraph：state / nodes / build
 │  ├─ tools/             # api_request / ui_check / fetch_openapi / rag_tool / rag_metrics
 │  ├─ report/            # HTML 报告渲染
-│  ├─ config.py / models.py / runner.py
+│  ├─ config.py / models.py / runner.py   # config.py 含 dev/staging/prod 环境分层
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（121 通过 + 15 项缺陷基准 xfail；另有 4 条 UI 用例本机因无 Chrome 失败）
+├─ tests/                # 项目自身 pytest（140 collected：121 passed + 15 缺陷基准 xfail + 4 UI 需浏览器）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示
+│  ├─ check_commit_msg.py  # 零依赖的 Conventional Commits 校验（无 Node 环境的降级路径）
+│  └─ env/               # 配置档案：dev.env / staging.env / prod.env
+├─ .github/              # CI workflow / Dependabot / PR 与 Issue 模板
+├─ .husky/               # commit-msg 钩子（调用 commitlint）
 ├─ reports/              # 运行产物（HTML/JSON 报告 + 截图）
-└─ requirements.txt / pyproject.toml
+├─ Dockerfile / docker-compose.yml / .dockerignore   # 容器化（app / test 两个 profile）
+├─ requirements.txt      # 运行依赖（全 == 钉死）
+├─ requirements-dev.txt  # 工程化依赖（在其之上叠加 pytest-cov / mypy / ruff / pip-audit / pre-commit）
+├─ requirements.lock     # pip-tools 生成的完整锁文件
+├─ pyproject.toml        # 打包元数据 + [tool.mypy] / [tool.ruff] / [tool.coverage.*]
+├─ .pre-commit-config.yaml / commitlint.config.js
+└─ README.md / CONTRIBUTING.md / CHANGELOG.md / CODEOWNERS
 ```
 
 ## 常见问题
@@ -264,7 +426,12 @@ sequenceDiagram
 - **UI 自动化为什么不用 Selenium/Playwright？** 项目默认用系统 Chrome 无头模式（`--dump-dom` + 截图），零驱动零下载；同时内置 Selenium 后端，`--ui-backend selenium` 可切换，体现多方案能力。
 - **RAG 为什么要自己实现 BM25？** 为了不引入任何第三方依赖、保证离线确定性可回归；embedding 后端是可选增强，缺 Key 自动降级，不影响 CI。
 - **怎么把 MockBrain 换成真 LLM？** 配置 `AGENTTEST_LLM_*` 环境变量后加 `--force-llm`。
-- **Python 3.8 能跑吗？** 不行，LangChain/LangGraph 需要 3.9+；本机验证用 Python 3.12。
+- **Python 3.8 能跑吗？** 不行，LangChain/LangGraph 需要 3.9+；本机验证用 Python 3.12。CI 与容器统一用 3.12。
+- **CI 有哪些 job？** 六个：`test`（测试 + 覆盖率门槛）、`lint`（mypy + ruff + 锁文件校验）、`container`（compose 静态校验 + 构建 + 冒烟）、`security`（pip-audit，非阻塞）、`commit-msg`（Conventional Commits）、`notify`（仅在失败时触发）。每个 job 都有 `timeout-minutes` 与 pip 缓存；同分支连续 push 会由 `concurrency` 自动取消旧运行。
+- **为什么 CI 里 `pip-audit` 不阻塞？** 它查的是外部漏洞库，与本次改动的代码质量无关；一条正确的提交也可能隔天因为某个依赖被披露新 CVE 而变红。结果照进日志、step summary 与 artifact，但不拦 PR。需要强迫升级时由 Dependabot 自动开 PR。
+- **CI 失败会通知我吗？** 会。`notify` job 在 `failure()` 时把摘要写进运行页面的 Step Summary，并用仓库内置 `GITHUB_TOKEN` 自动开/更新带 `ci-failure` 标签的 issue——**不需要配置任何 secret**。想接企业微信/钉钉机器人（需要 webhook secret）的做法写在 workflow 的注释里，代码中刻意不引用不存在的 secret。
+- **为什么同时有 commitlint 和 scripts/check_commit_msg.py？** commitlint 要求本机有 Node + `npm install`；在只有 Python 的机器上就废了。Python 版零依赖，是**降级路径**而非重复劳动，也保证即使移掉 `package.json`，提交规范门禁依然成立。
+- **`ruff format` 为什么没启用？** 实测 `ruff format --check .` → 「35 files would be reformatted, 11 files already formatted」（EXIT=1）。挂进 pre-commit 后任何人 commit 一次就会被强制格式化 35 个业务文件，跨越「只动工程化外壳」的边界。因此本地与 CI 口径一致：只跑 `ruff check`，格式化留作独立任务（见 CHANGELOG 的 Unreleased 段）。
 
 ## License
 

@@ -1,0 +1,27 @@
+# Issue 模板选择器配置
+# 文档：https://docs.github.com/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+#
+# blank_issues_enabled: false —— 强制走模板。
+# 理由：本仓库有 9 个「故意注入的缺陷」，不开模板的话，
+# 大量 issue 会是「demo_app 有个 bug」这类无效报告；
+# bug_report 模板的第一段就把这件事讲清楚了，能省下双方的时间。
+# 但也保留一个「空模板」入口（下面 contact_links 里的第一个链接），
+# 避免把「确实不属于以上两类」的问题堵死。
+blank_issues_enabled: false
+
+contact_links:
+  - name: 💬 使用问题 / 一般讨论
+    url: https://github.com/lefan17/agent-test-hub/discussions
+    about: 不知道怎么跑、配置 LLM 报错、想聊聊方案 —— 这类问题更适合讨论区，不必开 issue。
+
+  - name: 📖 操作指南（安装 / 运行 / 配置 LLM / 故障排查 / 二次开发）
+    url: https://github.com/lefan17/agent-test-hub/blob/main/docs/%E6%93%8D%E4%BD%9C%E6%8C%87%E5%8D%97.md
+    about: 开 issue 前先翻一遍，多数「跑不起来」的答案在这里。
+
+  - name: 📄 在线测试报告（GitHub Pages）
+    url: https://lefan17.github.io/agent-test-hub/report.html
+    about: 想先看看它产出什么，直接看这份报告。
+
+  - name: 🤝 贡献指南
+    url: https://github.com/lefan17/agent-test-hub/blob/main/CONTRIBUTING.md
+    about: 想提 PR 之前请先读这个 —— 本地环境、提交规范、CI 门禁都在里面。

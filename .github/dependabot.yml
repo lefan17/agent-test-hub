@@ -1,0 +1,64 @@
+# 依赖清单（由 Dependabot 自动提 PR 更新）
+# 文档：https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # ---------- Python 依赖（pip） ----------
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    # 同 batch 的补丁级更新合并成一个 PR，避免刷屏
+    groups:
+      pip-patch:
+        patterns: ["*"]
+        update-types: ["patch"]
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      # 与 Conventional Commits 对齐（scripts/check_commit_msg.py 会校验）
+      prefix: "chore"
+      include: "scope"
+    reviewers:
+      - "lefan17"
+
+  # ---------- GitHub Actions（工作流里用到的 action 版本） ----------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    reviewers:
+      - "lefan17"
+
+  # ---------- npm（commitlint / husky 工具链） ----------
+  #
+  # 本仓库的 package.json 只服务提交规范，不影响 Python 运行。
+  # 但 devDependencies 同样值得跟进安全更新，故一并纳入。
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "chore"
+      include: "scope"

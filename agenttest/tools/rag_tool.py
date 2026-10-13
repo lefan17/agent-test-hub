@@ -78,7 +78,8 @@ def rag_update_doc(base_url: str, doc_id: str, text: str, timeout: float = 10.0)
 
 
 def doc_ids_in_index(index_detail: Dict[str, Any]) -> List[str]:
-    body = index_detail.get("body") if isinstance(index_detail.get("body"), dict) else {}
+    raw_body = index_detail.get("body")
+    body: Dict[str, Any] = raw_body if isinstance(raw_body, dict) else {}
     return [str(doc_id) for doc_id in (body.get("doc_ids") or [])]
 
 

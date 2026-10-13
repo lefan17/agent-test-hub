@@ -98,8 +98,11 @@ def build_context(cfg: Config, skip_ui: bool) -> Dict[str, Any]:
 def main(argv: Optional[list] = None) -> int:
     # Windows 控制台默认 GBK，强制 UTF-8 输出避免 emoji/中文报错
     for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
         try:
-            stream.reconfigure(encoding="utf-8")
+            reconfigure(encoding="utf-8")
         except Exception:
             pass
     args = parse_args(argv)

@@ -1,0 +1,86 @@
+# AgentTest Hub 本地编排
+#
+# 两条路径用 compose profiles 区分，避免「起容器必跑测试」：
+#
+#   # 路径一：只跑被测系统（供 docker compose 之外的 Agent 压测/手工浏览）
+#   docker compose --profile app up --build demo-app
+#
+#   # 路径二：只跑项目自身测试套件（含覆盖率门槛，等价于 CI 的 test job）
+#   docker compose --profile test up --build --abort-on-container-exit tests
+#
+#   # 两条一起（测试会等 demo-app healthy 之后再跑）
+#   docker compose --profile app --profile test up --build
+#
+# 未验证项：本沙箱 Docker daemon 无法启动（WSL E_ACCESSDENIED），
+#          本文件只通过 `docker compose --profile '*' config --quiet`（EXIT=0）
+#          做过静态校验，从未真实 build 或 run 过。
+#          README「容器化」一节同样如此声明。
+#
+# ⚠️ 校验时**必须**带 `--profile '*'`：下面两个 service 都挂了 profiles，
+#    不带 profile 时 `docker compose config` 会把它们全部过滤掉，解析结果
+#    退化成 `services: {}` 却依然 EXIT=0 —— 看起来通过了，实际一点没校验。
+
+name: agent-test-hub
+
+services:
+  # ---------- 路径一：被测系统 ----------
+  demo-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_DEV: "0"
+    image: agent-test-hub:latest
+    profiles: ["app"]
+    container_name: agent-test-hub-demo-app
+    environment:
+      AGENTTEST_ENV: dev
+      AGENTTEST_DEMO_URL: http://127.0.0.1:5001
+    ports:
+      - "5001:5001"
+    # 用标准库 urllib 探活，不依赖镜像里没有的 curl/wget
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5001/openapi.json', timeout=3).status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # ---------- 路径二：项目自身测试套件 ----------
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_DEV: "1"     # 测试路径需要 pytest-cov（覆盖率门槛）
+    image: agent-test-hub:test
+    profiles: ["test"]
+    container_name: agent-test-hub-tests
+    working_dir: /app
+    environment:
+      AGENTTEST_ENV: dev
+    # 与 CI test job 完全同一条命令：`python -m pytest`（不是裸 pytest）
+    # --ignore=tests/test_ui_tool.py：容器内无浏览器，且 CI 的阻塞口径同样忽略这 4 条
+    command:
+      - python
+      - -m
+      - pytest
+      - -o
+      - addopts=
+      - -q
+      - --ignore=tests/test_ui_tool.py
+      - --cov=agenttest
+      - --cov=demo_app
+      - --cov-report=term-missing
+      - --cov-fail-under=70
+    depends_on:
+      demo-app:
+        condition: service_healthy
+        required: false

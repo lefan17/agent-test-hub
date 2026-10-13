@@ -1,0 +1,65 @@
+# 工程化 / 测试依赖（与运行依赖分离：镜像可以用 INSTALL_DEV=0 只装运行依赖）
+#
+# 全部钉死。前六个包与 .venv 实测版本逐条一致（见下方核对表）；
+# 最后两个包（pre-commit / commitizen）本机从未安装，版本号无法核对，已如实标注。
+# CI 的 lint / coverage 步骤装这一份。
+#
+# ⚠️ 一处口径差异需知悉：pytest-cov / coverage / ruff 三个包**不是**从 PyPI
+#   pip install 进来的（本开发沙箱网络不可达），而是从同机另一个 Python 3.12
+#   虚拟环境复制到 .venv\Lib\site-packages 的。也就是说：
+#     - 「本地实测覆盖率 73.44%」「ruff check 全通过」是**真跑出来的结果**；
+#     - 但本行钉死的版本号能否被 CI 的 `pip install -r requirements-dev.txt`
+#       成功解析安装，**本机无法验证**（pip 装任何包都会挂起）。
+#   CI 首次运行时若报「找不到该版本」，按实际可用版本调整本文件即可，
+#   其余配置无需改动。
+#
+# ---------------------------------------------------------------------------
+# 钉版 vs .venv 实测版本 逐条核对（实测命令：
+#   .venv\Scripts\python.exe -c "from importlib.metadata import version; ..."
+#   及 .venv\Scripts\python.exe -m pip show pytest-cov coverage ruff）
+# 核对日期：本次补强交付前。
+#
+#   包            本文件钉版    .venv 实测    结论
+#   ------------  -----------   -----------   --------------------------
+#   pytest-cov    7.1.0         7.1.0         一致
+#   coverage      7.16.2        7.16.2        一致
+#   ruff          0.17.0        0.17.0        一致
+#   mypy          2.4.0         2.4.0         一致
+#   pip-audit     2.10.1        2.10.1        一致
+#   pip-tools     7.6.2         7.6.2         一致
+#   pre-commit    4.3.0         未安装        无法核对（沙箱装不上，见下）
+#   commitizen    4.9.1         未安装        无法核对（同上；本仓实际未使用）
+#
+# 前六个包「本机实测覆盖率/ruff/mypy/piptools 锁文件」都是基于这些确切版本
+# 跑出来的，钉版与实测完全吻合，没有未经验证的版本号。
+#
+# 后两个包**从未在本机安装过**（连复制来的都没有），所以它们的版本号是本文件
+# 唯一两处「未经本机验证」的声明，如实标注：
+#   - pre-commit：4.3.0 是撰写时 PyPI 上的稳定版，语义化版本号本身是合理的；
+#     但本机 ensurepip 被沙箱拒绝（PermissionError WinError 5），从未跑过
+#     `pre-commit run`，故 .pre-commit-config.yaml 从未被该版本执行过。
+#   - commitizen：本仓库并未使用它（提交规范走 commitlint + 自研
+#     scripts/check_commit_msg.py 双实现），放在这里只是为了将来 `cz commit`
+#     可用时无需再改依赖表。若不需要可以删除该行，不影响任何 CI job。
+# ---------------------------------------------------------------------------
+-r requirements.txt
+
+# 覆盖率门槛（CI test job 用它算 --cov-fail-under）
+pytest-cov==7.1.0
+coverage==7.16.2
+
+# 静态类型检查（CI lint job）
+mypy==2.4.0
+
+# Lint / 格式化（CI lint job + .pre-commit-config.yaml）
+ruff==0.17.0
+
+# 依赖漏洞扫描（CI security job；Dependabot 负责版本更新）
+pip-audit==2.10.1
+
+# 锁文件生成（python -m piptools compile -o requirements.lock）
+pip-tools==7.6.2
+
+# 提交信息规范 / 本地钩子（CI commitlint job + pre-commit）
+pre-commit==4.3.0
+commitizen==4.9.1

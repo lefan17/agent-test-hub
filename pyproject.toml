@@ -30,3 +30,108 @@ include = ["agenttest*", "demo_app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+# ---------------------------------------------------------------------------
+# 静态类型检查（CI 的 lint job 与 .pre-commit-config.yaml 的 mypy hook 同用这一份）
+#
+# python_version 为什么钉 3.12 而不是 requires-python 的 3.9：
+#   mypy 必须按**真实运行环境**判断哪些标注可用。CI（setup-python 3.12）、
+#   Dockerfile（python:3.12-slim）、本机 .venv（3.12.10）三者一致，
+#   所以这里跟 3.12 走；`requires-python = ">=3.9"` 描述的是「可安装范围」，
+#   不是「本仓库实际验证过的版本」（README 里写明在 3.12 上验证）。
+#   两者混用会让 mypy 报出与运行时无关的假错。
+#
+# strict 相关开关是逐步加的：先开最有价值、且当前仓库真能过的那几项，
+# 避免一次性开满导致 CI 出现几十条与本次改动无关的历史告警。
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+files = ["agenttest", "demo_app"]
+# 第三方库（flask/requests/selenium/langchain）多数不带 py.typed，
+# 对它们做「缺类型存根」检查只会淹没真实错误。
+ignore_missing_imports = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+show_error_codes = true
+pretty = true
+# 不要把 venv / 构建产物当成源码扫进来
+exclude = '(^|/)(\.venv|build|dist|reports)/'
+
+# ---------------------------------------------------------------------------
+# Lint（CI 的 lint job 与 pre-commit 的 ruff hook 同用这一份）
+#
+# 规则集为什么只选这些：仓库里已有 200+ 条历史告警（E501 超长行、UP006 旧式
+# 泛型标注、RUF001 中文全角标点等），它们集中在 agenttest/ 与 demo_app/ 的
+# **业务逻辑**里，而本次改动被明确限定为「只动工程化外壳、不改业务逻辑」，
+# 因此不去批量改写这些历史代码。这里收敛到一组「改了就是真问题」的规则：
+#   E4/E9  导入与语法层面的硬错误（E9 是 pycodestyle 的语法/IO 错误码）
+#   F63/F7/F82  断言恒真、print 残留、未定义名字等真实缺陷
+#   W6   弃用警告类
+#   PGH  类型 ignore 注释写错位置/写错码（配合 mypy 使用）
+#   PIE  明显无意义或误导性写法
+#   RUF100  多余的 `# noqa`
+# 历史告警的清理是独立的技术债任务，已写进 CHANGELOG 的 Unreleased 段。
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".venv", "reports", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E4", "E9", "W6", "F63", "F7", "F82", "PGH", "PIE", "RUF100"]
+# 说明：刻意不开 E501。实测超长行（`ruff check --select E501`）：
+#   line-length = 88（ruff 默认）→ 278 处
+#   line-length = 120（下方本仓库配置）→ 18 处
+# 开启会让 CI 一开始就是红的，属于把技术债混进本次交付。
+# 同理不做 `ruff format`：实测 35 个文件会被重排（见 CHANGELOG Unreleased 段）。
+
+[tool.ruff.lint.per-file-ignores]
+# scripts/ 是本仓库自己新加的工程化脚本，比业务代码更容易保持干净
+"scripts/*.py" = []
+
+# ---------------------------------------------------------------------------
+# 覆盖率（pytest-cov 读取这里的配置）
+#
+# 注意门槛值 **不放在 addopts 里**：
+#   pyproject 的 addopts 已被 `-q` 占用，而 CI 用 `-o addopts=` 覆盖它，
+#   所以覆盖率参数一律由命令行显式传入（见 .github/workflows/test.yml）。
+#   fail_under 写在配置里只作为「手工跑 cov 时的默认兜底」。
+#
+# 门槛值 70 的来源是**实测**，不是拍脑袋：
+#   python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
+#     --cov=agenttest --cov=demo_app --cov-report=term-missing
+#   仓库默认配置（下面 branch = true）：TOTAL 1378 stmts / 330 miss / 354 branch = 73.44%
+#   关掉分支覆盖对照：            TOTAL 1380 stmts / 331 miss = 76%
+# 取整到 70：低于两条实测口径（73.44% / 76%）留有约 3.4 个百分点的余量，
+# 但足以拦住「整块模块失去覆盖」这类退化（例如 runner.py 122 行未覆盖时
+# 整体会掉到 64% 左右，必然失败）。
+# 覆盖率画像（谁没被覆盖）见 README「覆盖率」一节。
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+# 分支覆盖比语句覆盖更接近「测试是否真的走过每条路径」，
+# 因此默认开启；代价是数字比纯语句覆盖低约 4 个百分点（见上面的实测）。
+branch = true
+source = ["agenttest", "demo_app"]
+# __main__.py 只是 CLI 薄壳（3 行 argparse 转发），单独跑它没有断言价值
+omit = ["agenttest/__main__.py"]
+
+[tool.coverage.report]
+# 实测（2026-10 本机 .venv，Python 3.12.10）：
+#   python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
+#     --cov=agenttest --cov=demo_app --cov-report=term-missing
+#   → TOTAL 1378 stmts / 330 miss / 354 branch = 73.44%（branch = true，本配置）
+#   → 对照关掉 branch：1380 stmts / 331 miss = 76%
+# 门槛取 70：比分支口径实测低 3.4 个百分点，给后续重构留出余量，
+# 但仍能拦住「大段代码失去覆盖」这类退化。
+fail_under = 70
+show_missing = true
+skip_covered = false
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+  "raise NotImplementedError",
+]

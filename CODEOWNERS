@@ -1,0 +1,49 @@
+# CODEOWNERS —— 谁负责哪些路径
+#
+# 语法：<pattern> <@user 或 @org/team> ...
+# 匹配规则：后面的规则覆盖前面的，最后一条匹配的规则生效。
+# 官方文档：https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# 本仓库目前是单人维护，因此所有路径都指向仓库所有者；
+# 保留这份文件的意义在于「把所有权显式写下来」——
+# 一旦有协作者加入，只需在这里加人，不必再翻代码判断该找谁 review。
+#
+# 注意：要让 CODEOWNERS 真正生效，需要在仓库
+#   Settings → Branches → 分支保护规则里勾选 "Require review from Code Owners"。
+# 本文件只声明归属，不自己制造强制力。
+
+# ---------- 默认：全仓库归所有者 ----------
+*                       @lefan17
+
+# ---------- 被测系统：注入的缺陷是「被测对象」，改动必须由所有者确认 ----------
+# demo_app/ 里的 9 个注入缺陷（2 个 API + 1 个 Flaky + 6 个 RAG）是测试系统的输入，
+# 不是待修的 bug。误「顺手修好」会让 15 条 xfail 基准集体 XPASS 失败。
+/demo_app/              @lefan17
+
+# ---------- 测试套件：断言与 xfail 基准是回归网，改动需所有者过目 ----------
+/tests/                 @lefan17
+
+# ---------- CI 与工程化外壳：影响所有协作者的流水线 ----------
+/.github/               @lefan17
+/.github/workflows/     @lefan17
+/Dockerfile             @lefan17
+/docker-compose.yml     @lefan17
+/.pre-commit-config.yaml @lefan17
+/commitlint.config.js   @lefan17
+/.husky/                @lefan17
+
+# ---------- 依赖清单：升级依赖会牵动 CI、容器与安全扫描 ----------
+/requirements.txt       @lefan17
+/requirements-dev.txt   @lefan17
+/requirements.lock      @lefan17
+/pyproject.toml         @lefan17
+
+# ---------- 环境分层档案：staging / prod 的值直接影响跑在哪套环境上 ----------
+/scripts/env/           @lefan17
+/.env.example           @lefan17
+
+# ---------- 文档与协作模板 ----------
+/README.md              @lefan17
+/CONTRIBUTING.md        @lefan17
+/CHANGELOG.md           @lefan17
+/docs/                  @lefan17
