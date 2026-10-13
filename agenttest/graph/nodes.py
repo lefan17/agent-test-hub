@@ -7,8 +7,12 @@
 """
 from __future__ import annotations
 
+import json
+import re
 import time
 from typing import Any, Dict, List
+
+from bs4 import BeautifulSoup
 
 from agenttest.brain import BaseBrain, MockBrain
 from agenttest.config import Config
@@ -59,7 +63,7 @@ def make_executor(cfg: Config):
                 if last_detail["ok"] or attempts >= cfg.max_attempts or not _retryable(_status_of(last_detail)):
                     break
                 retried = True
-                time.sleep(0.3 * attempts)
+                time.sleep(0.3 * 2 ** (attempts - 1))  # 指数退避：0.3s, 0.6s, 1.2s…
             duration_ms = int((time.perf_counter() - start) * 1000)
             actual = str(last_detail.get("actual", ""))
             ok = bool(last_detail["ok"])
@@ -121,18 +125,59 @@ def _check_label(check: Check) -> str:
 
 
 def _run_api_case(case: TestCase, base_url: str) -> Dict[str, Any]:
+    """执行一条 API 用例：状态码 + 响应体关键字段双断言。
+
+    状态码不符即失败；`case.checks` 非空时还要逐条校验响应体关键字段
+    （contains_text / title_contains / has_element），避免「状态码对了就算过」的假绿。
+    """
     detail = api_request(case.method, case.path, query=case.query, body=case.body,
                          headers=case.headers, base_url=base_url)
     actual = detail.get("status", 0)
     ok = bool(detail.get("ok")) and actual == case.expected_status
+    failures: List[str] = []
+    if not detail.get("ok"):
+        failures.append(detail.get("error") or "请求失败")
+    elif actual != case.expected_status:
+        failures.append(f"期望状态码 {case.expected_status}，实际 {actual}")
+    for check in case.checks:
+        verdict = _eval_api_check(check, detail.get("body"))
+        if not verdict["ok"]:
+            failures.append(verdict["detail"])
     return {
-        "ok": ok,
+        "ok": ok and not failures,
         "status": actual,
         "actual": f"{actual} {_body_snippet(detail.get('body'))}",
-        "error": "" if ok else (detail.get("error") or f"期望 {case.expected_status}，实际 {actual}"),
+        "error": "" if (ok and not failures) else "；".join(failures),
         "evidence": f"请求 {case.method} {case.path} -> {actual}，响应体: {_body_snippet(detail.get('body'), 300)}",
         "notes": [f"耗时 {detail.get('time_ms')}ms"],
     }
+
+
+def _eval_api_check(check: Check, body: Any) -> Dict[str, Any]:
+    """对 API 响应体求值一条 Check（非 RAG 的通用断言类型）。"""
+    text = body if isinstance(body, str) else ("" if body is None else json.dumps(body, ensure_ascii=False))
+    if check.type == "contains_text":
+        found = check.target in text
+        return {"ok": found, "detail": f"响应体缺少关键字段 {check.target!r}"}
+    if check.type == "title_contains":
+        found = check.target in _html_title(text)
+        return {"ok": found, "detail": f"页面标题缺少 {check.target!r}（实际 {_html_title(text)!r}）"}
+    if check.type == "has_element":
+        found = _has_element(text, check.target)
+        return {"ok": found, "detail": f"页面缺少元素 {check.target!r}"}
+    return {"ok": False, "detail": f"API 用例不支持的断言类型 {check.type}"}
+
+
+def _html_title(text: str) -> str:
+    match = re.search(r"<title[^>]*>(.*?)</title>", text, flags=re.IGNORECASE | re.DOTALL)
+    return match.group(1).strip() if match else ""
+
+
+def _has_element(text: str, selector: str) -> bool:
+    try:
+        return BeautifulSoup(text, "html.parser").select_one(selector) is not None
+    except Exception:  # 选择器非法等：按「未命中」处理，不静默通过
+        return False
 
 
 def _body_snippet(body: Any, limit: int = 200) -> str:
@@ -156,6 +201,7 @@ def _run_rag_case(case: TestCase, base_url: str) -> Dict[str, Any]:
     detail = rag_search(base_url, case.rag_query, case.top_k)
     hits = detail["hits"]
     index_info = detail["index"]
+    status = detail["status"]
     metrics = {
         "recall_at_k": recall_at_k(hits, case.rag_relevant, case.top_k),
         "mrr": reciprocal_rank(hits, case.rag_relevant),
@@ -168,11 +214,10 @@ def _run_rag_case(case: TestCase, base_url: str) -> Dict[str, Any]:
 
     if case.expected_status < 400:
         for check in case.checks:
-            verdict = _eval_rag_check(check, hits, case)
+            verdict = _eval_rag_check(check, hits, case, status)
             if not verdict["ok"]:
                 failures.append(verdict["detail"])
 
-    status = detail["status"]
     hit_ids = [h.get("doc_id") for h in hits]
     ok = not failures
     return {
@@ -193,7 +238,13 @@ def _run_rag_case(case: TestCase, base_url: str) -> Dict[str, Any]:
     }
 
 
-def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase) -> Dict[str, Any]:
+def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase,
+                    status: int = 0) -> Dict[str, Any]:
+    """求值一条 RAG 断言。
+
+    未实现的 check.type **必须判失败**：旧实现在末尾兜底返回 ok=True，任何漏写分支的
+    新断言类型都会静默通过（假绿），这比断言失败更危险。
+    """
     if check.type == "rag_hits_include":
         wanted = list(check.doc_ids or ([check.target] if check.target else []))
         got = {str(h.get("doc_id")) for h in hits}
@@ -214,7 +265,11 @@ def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase) ->
         value = reciprocal_rank(hits, case.rag_relevant)
         return {"ok": value + 1e-12 >= check.threshold,
                 "detail": f"MRR={value:.6f} < 阈值 {check.threshold}"}
-    return {"ok": True, "detail": f"未识别的 RAG 断言 {check.type}"}
+    if check.type == "rag_status":
+        expected = int(check.threshold) if check.threshold else case.expected_status
+        return {"ok": int(status) == expected,
+                "detail": f"状态码期望 {expected}，实际 {status}"}
+    return {"ok": False, "detail": f"未实现的断言类型 {check.type}（executor 未支持，按失败处理）"}
 
 
 def _run_rag_consistency_case(case: TestCase, base_url: str) -> Dict[str, Any]:

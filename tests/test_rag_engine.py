@@ -218,6 +218,34 @@ def test_build_report_aggregates_per_query():
     assert report["per_query"][1]["retrieved"] == []
 
 
+def test_recall_at_k_without_labels_is_zero():
+    # 没有标注就无从判断是否漏召，不能按「无可漏项」记满分
+    assert recall_at_k(HITS, [], 5) == 0.0
+    assert reciprocal_rank(HITS, []) == 0.0
+
+
+def test_build_report_excludes_unlabeled_queries_from_average():
+    """无标注查询不参与宏平均：既不计满分，也不计 0 分去拉低整体指标。"""
+    report = build_report(
+        [{"q": "labeled", "relevant": ["A"], "hits": HITS},
+         {"q": "unlabeled", "relevant": [], "hits": HITS}],
+        k=3,
+    )
+    assert report["query_count"] == 2            # 仍然如实报告查询总数
+    assert report["labeled_count"] == 1
+    assert report["unlabeled_count"] == 1
+    assert report["recall_at_k"] == pytest.approx(1.0)   # 只由有标注的那条决定
+    assert report["mrr"] == pytest.approx(1.0)
+    assert report["per_query"][1]["labeled"] is False
+
+
+def test_build_report_with_no_labels_at_all_is_zero():
+    report = build_report([{"q": "q", "relevant": [], "hits": HITS}], k=3)
+    assert report["labeled_count"] == 0
+    assert report["recall_at_k"] == 0.0
+    assert report["mrr"] == 0.0
+
+
 def test_check_rank_monotonic_detects_ascending_scores():
     bad = [{"doc_id": "A", "score": 1.0, "rank": 1}, {"doc_id": "B", "score": 2.0, "rank": 2}]
     assert check_rank_monotonic(bad)["ok"] is False

@@ -21,6 +21,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import threading
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # ---------- 契约常量 ----------
@@ -266,6 +267,9 @@ class RagService:
         backend: Optional[str] = None,
         corpus: Optional[Sequence[Tuple[str, str]]] = None,
     ) -> None:
+        # 可重入锁：Flask 以 threaded=True 提供本服务，读写路径共享同一份倒排索引，
+        # 检索过程中若有并发写会触发 RuntimeError: dictionary changed size during iteration。
+        self._lock = threading.RLock()
         self.bugs = dict(RAG_BUGS)
         if bugs:
             self.bugs.update({k: bool(v) for k, v in bugs.items() if k in RAG_BUGS})
@@ -300,15 +304,16 @@ class RagService:
         return len(self.backend.indexed_ids())
 
     def stats(self) -> Dict[str, Any]:
-        return {
-            "backend": self.backend.name,
-            "size": self.size(),
-            "version": self.version,
-            "doc_ids": sorted(self.corpus),
-            "index_size": self.index_size(),
-            "requested_backend": self.requested_backend,
-            "fallback": self.fallback_reason,
-        }
+        with self._lock:
+            return {
+                "backend": self.backend.name,
+                "size": self.size(),
+                "version": self.version,
+                "doc_ids": sorted(self.corpus),
+                "index_size": self.index_size(),
+                "requested_backend": self.requested_backend,
+                "fallback": self.fallback_reason,
+            }
 
     # ----- 契约校验 -----
 
@@ -344,7 +349,8 @@ class RagService:
     # ----- 检索 -----
 
     def search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
-        ranked = self._rank(self._contributions(query), top_k)
+        with self._lock:  # 整个「打分 + 聚合排序」过程持锁，避免读到迭代中的半成品索引
+            ranked = self._rank(self._contributions(query), top_k)
         return [
             {"doc_id": doc_id, "score": round(float(score), 6), "rank": rank,
              "text": self.corpus.get(doc_id, "")}
@@ -377,31 +383,48 @@ class RagService:
 
     # ----- 语料增删改（BUG_RAG_STALE_INDEX 的注入点）-----
 
+    def has_doc(self, doc_id: str) -> bool:
+        with self._lock:
+            return doc_id in self.corpus
+
     def add_doc(self, doc_id: str, text: str) -> None:
-        self.corpus[doc_id] = text
-        self.backend.add(doc_id, text)
-        self.version += 1
+        """新增语料文档；doc_id 已存在时按「覆盖写入」处理（先清旧倒排项再索引）。
+
+        必须与 update_doc 一样先 remove：BM25Backend._index_one 对已存在的 term 做 tf 累加，
+        不先清空会让旧词残留下来（覆盖后旧查询仍命中），这正是第 7 个真实缺陷。
+        """
+        with self._lock:
+            self.corpus[doc_id] = text
+            if not self.bugs["stale_index"]:
+                self.backend.remove(doc_id)
+                self.backend.add(doc_id, text)
+            else:  # 缺陷：新增/覆盖时不同步倒排索引
+                self.backend.add(doc_id, text)
+            self.version += 1
 
     def remove_doc(self, doc_id: str) -> bool:
-        if self.corpus.pop(doc_id, None) is None:
-            return False
-        if not self.bugs["stale_index"]:  # 缺陷：删除时忘记同步倒排索引
-            self.backend.remove(doc_id)
-        self.version += 1
-        return True
+        with self._lock:
+            if self.corpus.pop(doc_id, None) is None:
+                return False
+            if not self.bugs["stale_index"]:  # 缺陷：删除时忘记同步倒排索引
+                self.backend.remove(doc_id)
+            self.version += 1
+            return True
 
     def update_doc(self, doc_id: str, text: str) -> bool:
-        if doc_id not in self.corpus:
-            return False
-        self.corpus[doc_id] = text
-        if not self.bugs["stale_index"]:  # 缺陷：更新时忘记重建该文档的倒排项
-            self.backend.remove(doc_id)
-            self.backend.add(doc_id, text)
-        self.version += 1
-        return True
+        with self._lock:
+            if doc_id not in self.corpus:
+                return False
+            self.corpus[doc_id] = text
+            if not self.bugs["stale_index"]:  # 缺陷：更新时忘记重建该文档的倒排项
+                self.backend.remove(doc_id)
+                self.backend.add(doc_id, text)
+            self.version += 1
+            return True
 
     def reindex(self) -> int:
         """依据当前语料重建索引，返回新的 version（可用于修复索引不一致）。"""
-        self.backend.build(self.corpus)
-        self.version += 1
-        return self.version
+        with self._lock:
+            self.backend.build(self.corpus)
+            self.version += 1
+            return self.version

@@ -255,13 +255,17 @@ def create_app() -> Flask:
 
     @app.post("/api/rag/docs")
     def rag_add_doc() -> Any:
+        # 语义：upsert。doc_id 已存在时按覆盖写入处理（RagService.add_doc 会先清旧倒排项），
+        # 因此没有 409 分支——openapi.json 的 201/400 与本节一致。
         data = request.get_json(silent=True) or {}
         doc_id = str(data.get("doc_id") or "").strip()
         text = str(data.get("text") or "").strip()
         if not doc_id or not text:
             return jsonify({"error": "doc_id and text are required"}), 400
+        existed = rag.has_doc(doc_id)
         rag.add_doc(doc_id, text)
-        return jsonify({"data": {"doc_id": doc_id, "text": text}, "version": rag.version}), 201
+        return jsonify({"data": {"doc_id": doc_id, "text": text},
+                        "upserted": existed, "version": rag.version}), 201
 
     @app.patch("/api/rag/docs/<path:doc_id>")
     def rag_update_doc(doc_id: str) -> Any:

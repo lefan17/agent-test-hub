@@ -200,9 +200,8 @@
           }
         },
         "responses": {
-          "201": { "description": "创建成功，version 递增" },
-          "400": { "description": "doc_id 或 text 为空" },
-          "409": { "description": "doc_id 已存在" }
+          "201": { "description": "写入成功，version 递增；doc_id 已存在时为覆盖写入（upsert），响应带 upserted=true" },
+          "400": { "description": "doc_id 或 text 为空" }
         }
       }
     },

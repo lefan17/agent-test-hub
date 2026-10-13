@@ -119,6 +119,11 @@ def rag_consistency_probe(base_url: str, doc_id: str = RAG_PROBE_DOC_ID, text: s
       4. 再次检索 → 若仍返回该 doc_id，即为陈旧索引（ghost hit）
       5. POST reindex 清理
 
+    返回的 doc_ids 快照有三份，分别对应三个时刻，便于断言「加入 → 删除」确实发生过：
+      corpus_doc_ids_before     幂等清理**之前**（上一次若已清干净，此处不含探针文档）
+      corpus_doc_ids_mid        新增探针文档**之后**（必须含探针文档）
+      corpus_doc_ids_after_delete 删除之后（必须不含探针文档）
+
     `ok` 仅表示探针流程本身跑通（各步骤都有 HTTP 响应），不做业务断言。
     """
     index_before = rag_index(base_url, timeout=timeout)
@@ -140,6 +145,7 @@ def rag_consistency_probe(base_url: str, doc_id: str = RAG_PROBE_DOC_ID, text: s
         "probe_doc_id": doc_id,
         "probe_query": query,
         "corpus_doc_ids_before": doc_ids_in_index(index_before),
+        "corpus_doc_ids_mid": doc_ids_in_index(index_mid),
         "corpus_doc_ids_after_delete": corpus_ids_after,
         "corpus_size_after_delete": (index_after["body"] or {}).get("size") if isinstance(index_after["body"], dict) else None,
         "index_size_after_delete": (index_after["body"] or {}).get("index_size") if isinstance(index_after["body"], dict) else None,

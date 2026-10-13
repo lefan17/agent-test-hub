@@ -30,16 +30,17 @@
 ## 测试套件
 
 ```bash
-.venv/Scripts/python.exe -m pytest -q            # 97 passed, 15 xfailed, 4 failed
-.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 97 passed, 15 xfailed, 0 failed
+.venv/Scripts/python.exe -m pytest -q            # 115 passed, 15 xfailed, 4 failed
+.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 115 passed, 15 xfailed, 0 failed
 ```
 
 | 文件 | 条数 | 覆盖 |
 | --- | --- | --- |
 | `tests/test_demo_app.py` | 15（13 passed + 2 xfail） | 被测系统功能 + 2 项 API 缺陷基准 |
-| `tests/test_rag_engine.py` | 35 | BM25 后端、中文分词、排序/去重/索引不变量、检索指标纯函数、标注集指标复现、embedding 降级 |
+| `tests/test_rag_engine.py` | 38 | BM25 后端、中文分词、排序/去重/索引不变量、检索指标纯函数、标注集指标复现、embedding 降级 |
 | `tests/test_rag_tool.py` | 26（18 passed + 8 xfail） | RAG 工具层 + 端点契约缺陷基准（空 q / 非法 top_k / 超长 q 应 400） |
-| `tests/test_rag_sut.py` | 25（20 passed + 5 xfail） | RAG 端点功能、语料增删改、索引一致性、缺陷复现 + 正确实现对照组 |
+| `tests/test_rag_sut.py` | 30（25 passed + 5 xfail） | RAG 端点功能、语料增删改（含覆盖写入）、索引一致性、并发读写、缺陷复现 + 正确实现对照组 |
+| `tests/test_checks.py` | 10 | executor 断言求值层：API 双断言、rag_status、未实现断言必须失败、指数退避 |
 | `tests/test_api_tool.py` | 4 | 接口工具集成 |
 | `tests/test_mock_brain.py` | 5 | 规划与归因 |
 | `tests/test_report.py` | 1 | 报告渲染 |
@@ -156,7 +157,7 @@ export AGENTTEST_LLM_MODEL=deepseek-chat
 | GET | `/api/rag/search?q=<query>&top_k=<int>` | 返回 `{query, top_k, hits[{doc_id,score,rank,text}], index{backend,size,version}}`；`q` 缺失/为空/超长(>200)、`top_k` 非正/超过上限 50 时返回 400 |
 | GET | `/api/rag/index` | 索引与语料元信息：`backend` / `size` / `version` / `doc_ids` / `index_size` |
 | POST | `/api/rag/reindex` | 依据当前语料重建索引，返回新的 `version`（验证索引与语料一致性） |
-| POST | `/api/rag/docs` | 新增语料文档（`doc_id` + `text`），返回新 `version` |
+| POST | `/api/rag/docs` | 新增/覆盖语料文档（`doc_id` + `text`，**upsert 语义**：同 `doc_id` 覆盖写入并先清旧倒排项，响应带 `upserted` 标志），返回新 `version`；`openapi.json` 只声明 201/400，没有 409 |
 | PATCH / DELETE | `/api/rag/docs/<doc_id>` | 更新 / 删除语料文档（用于验证「删除后仍被召回」这类陈旧索引缺陷） |
 
 默认语料 11 篇：5 篇中文（`DOC-CN-001..005`）+ 4 篇英文（`DOC-EN-001..004`）+ 2 篇精确并列的 `DOC-TIE-001/002`（用于暴露并列排序缺陷）。
@@ -246,7 +247,7 @@ sequenceDiagram
 │  ├─ report/            # HTML 报告渲染
 │  ├─ config.py / models.py / runner.py
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（97 通过 + 15 项缺陷基准 xfail；另有 4 条 UI 用例本机因无 Chrome 失败）
+├─ tests/                # 项目自身 pytest（115 通过 + 15 项缺陷基准 xfail；另有 4 条 UI 用例本机因无 Chrome 失败）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示
 ├─ reports/              # 运行产物（HTML/JSON 报告 + 截图）

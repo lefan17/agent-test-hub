@@ -204,8 +204,10 @@ def test_consistency_probe_self_cleans(rag_url):
     probe = rag_consistency_probe(rag_url)
     assert probe["ok"] is True
     assert probe["add_status"] == 201 and probe["delete_status"] == 200
+    # 探针新增后确实进了语料（index_mid 快照），删除后确实退出（index_after 快照）。
+    # 不用 corpus_doc_ids_before：它取自幂等清理之前，上一次跑干净时本来就不含探针文档。
+    assert RAG_PROBE_DOC_ID in probe["corpus_doc_ids_mid"]
     assert RAG_PROBE_DOC_ID not in probe["corpus_doc_ids_after_delete"]
-    assert RAG_PROBE_DOC_ID in probe["corpus_doc_ids_before"] or True  # 之前已清干净时可能不在
     assert probe["reindex_status"] == 200
 
 

@@ -6,8 +6,12 @@
 """
 from __future__ import annotations
 
+import threading
+import time
+
 import pytest
 
+from agenttest.tools import rag_add_doc, rag_reindex, rag_search
 from demo_app.app import create_app
 from demo_app.rag import CORRECT_BUGS, RAG_BUGS, RagService
 
@@ -82,6 +86,107 @@ def test_update_document_replaces_text(client):
 
 def test_update_missing_document_is_404(client):
     assert client.patch("/api/rag/docs/DOC-NOT-EXIST", json={"text": "x"}).status_code == 404
+
+
+def test_add_document_overwrite_clears_stale_postings():
+    """覆盖写入同一 doc_id 必须先清旧倒排项，否则旧词仍能召回（第 7 个真实缺陷）。
+
+    这条缺陷独立于 6 个注入开关：把开关全关（CORRECT_BUGS）后它依然存在。
+    默认开关的 STALE_INDEX 注入点下旧词残留是**预期缺陷**，故此处用 CORRECT_BUGS 定位真缺陷。
+    """
+    service = RagService(bugs=CORRECT_BUGS)
+    service.add_doc("DOC-OVER-001", "vector database legacy")
+    assert "DOC-OVER-001" in [h["doc_id"] for h in service.search("vector", 5)]
+
+    service.add_doc("DOC-OVER-001", "zzz unrelated brand new content only")
+
+    for stale_query in ("vector", "database", "legacy"):
+        assert "DOC-OVER-001" not in [h["doc_id"] for h in service.search(stale_query, 5)], \
+            f"覆盖写入后旧词 {stale_query!r} 仍在召回旧内容"
+    assert "DOC-OVER-001" in [h["doc_id"] for h in service.search("zzz unrelated", 5)]
+    assert service.index_size() == service.size()
+
+
+def test_add_document_overwrite_does_not_inflate_score():
+    """tf 累加会让重复覆盖同一文档的分数虚高——覆盖后分数必须与首次写入完全一致。"""
+    service = RagService(bugs=CORRECT_BUGS)
+    text = "retrieval quality benchmark document"
+    service.add_doc("DOC-SCORE-001", text)
+    fresh = next(h["score"] for h in service.search("retrieval quality benchmark", 5)
+                 if h["doc_id"] == "DOC-SCORE-001")
+    for _ in range(3):
+        service.add_doc("DOC-SCORE-001", text)
+    repeated = next(h["score"] for h in service.search("retrieval quality benchmark", 5)
+                    if h["doc_id"] == "DOC-SCORE-001")
+    assert repeated == fresh, "覆盖写入累加了 tf，分数被虚高"
+
+
+def test_add_document_overwrite_is_upsert_with_flag(client):
+    """POST /api/rag/docs 为 upsert 语义（openapi.json 只声明 201/400，没有 409）。"""
+    first = client.post("/api/rag/docs", json={"doc_id": "DOC-UPSERT-001", "text": "alpha content"})
+    assert first.status_code == 201
+    assert first.get_json()["upserted"] is False
+
+    second = client.post("/api/rag/docs", json={"doc_id": "DOC-UPSERT-001", "text": "omega content"})
+    assert second.status_code == 201
+    assert second.get_json()["upserted"] is True
+    assert second.get_json()["version"] == first.get_json()["version"] + 1
+    # 覆盖写入不得新增语料条目（doc_id 仍是同一个）
+    doc_ids = client.get("/api/rag/index").get_json()["doc_ids"]
+    assert doc_ids.count("DOC-UPSERT-001") == 1
+
+
+def test_openapi_contract_matches_upsert_semantics(client):
+    """契约里不得再出现 409（实现从不返回它）。"""
+    spec = client.get("/openapi.json").get_json()
+    responses = spec["paths"]["/api/rag/docs"]["post"]["responses"]
+    assert set(responses) == {"201", "400"}
+
+
+def test_concurrent_search_and_write_is_stable():
+    """并发读写共享同一份倒排索引：不得抛 dictionary changed size during iteration。
+
+    自建一个多线程服务（与 agenttest/runner.py 的 threaded=True 一致），
+    避免并发写入的临时文档污染会话级 demo_server_url。
+    """
+    from werkzeug.serving import make_server
+
+    server = make_server("127.0.0.1", 0, create_app(), threaded=True)
+    base_url = f"http://127.0.0.1:{server.server_port}"
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    time.sleep(0.3)
+    try:
+        errors: list = []
+        deadline = time.time() + 1.5
+
+        def reader():
+            while time.time() < deadline:
+                try:
+                    rag_search(base_url, "vector database", 5)
+                except Exception as exc:  # pragma: no cover - 修复前这里会命中
+                    errors.append(f"{type(exc).__name__}: {exc}")
+
+        def writer():
+            index = 0
+            while time.time() < deadline:
+                try:
+                    rag_add_doc(base_url, f"DOC-RACE-{index % 20:03d}",
+                                "vector database concurrent write probe")
+                except Exception as exc:  # pragma: no cover
+                    errors.append(f"{type(exc).__name__}: {exc}")
+                index += 1
+
+        threads = [threading.Thread(target=reader) for _ in range(3)] + \
+                  [threading.Thread(target=writer) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert errors == []
+        assert rag_reindex(base_url)["status"] == 200
+    finally:
+        server.shutdown()
 
 
 # ---------- reindex ----------

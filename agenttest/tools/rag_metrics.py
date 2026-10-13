@@ -2,7 +2,7 @@
 
 指标定义（写进报告与文档的口径，务必与实现一致）：
   recall@k = |top-k 召回的 doc_id ∩ 标注相关 doc_id| / |标注相关 doc_id|
-             —— 单查询计算；多查询取算术平均（宏平均）。
+             —— 单查询计算；多查询取算术平均（宏平均），无标注的查询不参与宏平均。
   MRR     = mean(1 / 首个相关文档的 rank)，无相关文档召回时该查询 RR=0。
              —— 衡量「相关文档排得够不够靠前」。
 
@@ -41,9 +41,14 @@ def doc_ids_of(hits: Sequence[Dict[str, Any]]) -> List[str]:
 
 
 def recall_at_k(hits: Sequence[Dict[str, Any]], relevant: Sequence[str], k: int) -> float:
-    """recall@k：标注相关文档中被 top-k 召回的比例。无标注时返回 1.0（无可漏项）。"""
+    """recall@k：标注相关文档中被 top-k 召回的比例。
+
+    无标注（relevant 为空）时返回 0.0：没有标注就无从判断是否漏召，
+    不能按「无可漏项」记满分——那会把标注缺失静默变成一次满分。
+    这类查询在 `build_report` 里被标记为 unlabeled 并排除出宏平均。
+    """
     if not relevant:
-        return 1.0
+        return 0.0
     expected = {str(doc_id) for doc_id in relevant}
     retrieved = set(doc_ids_of(hits)[:max(int(k), 0)])
     return len(retrieved & expected) / len(expected)
@@ -70,6 +75,9 @@ def build_report(results: Sequence[Dict[str, Any]], k: int) -> Dict[str, Any]:
     """把多次检索结果汇总成质量指标报告。
 
     results 每项形如 {"q": str, "relevant": [doc_id...], "hits": [hit...]}。
+
+    宏平均只统计**有标注**的查询（`labeled_count`）：无标注查询的 recall 是无定义的，
+    把它算进去（无论记 0 还是记 1）都会污染整体指标，因此只排除、不参与。
     """
     per_query: List[Dict[str, Any]] = []
     for item in results:
@@ -78,16 +86,20 @@ def build_report(results: Sequence[Dict[str, Any]], k: int) -> Dict[str, Any]:
         per_query.append({
             "query": item.get("q", ""),
             "relevant": relevant,
+            "labeled": bool(relevant),
             "retrieved": doc_ids_of(hits)[:max(int(k), 0)],
             "recall_at_k": recall_at_k(hits, relevant, k),
             "reciprocal_rank": reciprocal_rank(hits, relevant),
         })
-    count = len(per_query) or 1
+    labeled = [p for p in per_query if p["labeled"]]
+    count = len(labeled) or 1
     return {
         "k": k,
         "query_count": len(per_query),
-        "recall_at_k": sum(p["recall_at_k"] for p in per_query) / count,
-        "mrr": sum(p["reciprocal_rank"] for p in per_query) / count,
+        "labeled_count": len(labeled),
+        "unlabeled_count": len(per_query) - len(labeled),
+        "recall_at_k": sum(p["recall_at_k"] for p in labeled) / count,
+        "mrr": sum(p["reciprocal_rank"] for p in labeled) / count,
         "per_query": per_query,
     }
 
