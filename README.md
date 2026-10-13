@@ -110,7 +110,7 @@
 
 ## 测试套件
 
-采集数 **140**（不含 UI 时 136 = 121 passed + 15 xfailed；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（PowerShell 7 / Python 3.12.10）：
+采集数 **140**（不含 UI 时 136 = 121 passed + 15 xfailed；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（PowerShell 5.1 / Python 3.12.10）：
 
 ```bash
 # 全量（含 UI）：本机无 Chrome → 4 failed
