@@ -124,6 +124,113 @@
         "summary": "待办统计",
         "responses": { "200": { "description": "统计信息" } }
       }
+    },
+    "/api/rag/search": {
+      "get": {
+        "summary": "RAG 检索（默认 BM25 后端，离线确定性）",
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string", "minLength": 1, "maxLength": 200 } },
+          { "name": "top_k", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 50, "default": 5 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "检索成功，hits 按 score 降序且 rank 从 1 连续；同一 doc_id 不重复出现",
+            "content": {
+              "application/json": {
+                "example": {
+                  "query": "向量数据库",
+                  "top_k": 5,
+                  "hits": [{ "doc_id": "DOC-CN-002", "score": 3.21, "rank": 1, "text": "向量数据库支持语义检索与相似度计算。" }],
+                  "index": { "backend": "bm25", "size": 11, "version": 1 }
+                }
+              }
+            }
+          },
+          "400": { "description": "q 缺失或为空、q 超长（>200）、top_k 非正整数或超过上限 50" }
+        }
+      }
+    },
+    "/api/rag/index": {
+      "get": {
+        "summary": "索引与语料元信息（backend / size / version / doc_ids）",
+        "responses": {
+          "200": {
+            "description": "索引元信息；index_size 与 size 不一致即为索引陈旧",
+            "content": {
+              "application/json": {
+                "example": {
+                  "backend": "bm25", "size": 11, "version": 1,
+                  "doc_ids": ["DOC-CN-001"], "index_size": 11,
+                  "requested_backend": "bm25", "fallback": ""
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rag/reindex": {
+      "post": {
+        "summary": "依据当前语料重建索引，返回新的 version（用于验证索引与语料一致性）",
+        "responses": {
+          "200": {
+            "description": "重建完成",
+            "content": {
+              "application/json": {
+                "example": { "reindexed": true, "version": 2, "size": 11, "backend": "bm25" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rag/docs": {
+      "post": {
+        "summary": "新增语料文档（用于验证索引增删同步）",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["doc_id", "text"],
+                "properties": { "doc_id": { "type": "string" }, "text": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "创建成功，version 递增" },
+          "400": { "description": "doc_id 或 text 为空" },
+          "409": { "description": "doc_id 已存在" }
+        }
+      }
+    },
+    "/api/rag/docs/{doc_id}": {
+      "patch": {
+        "summary": "更新语料文档正文",
+        "parameters": [{ "name": "doc_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "更新成功" },
+          "404": { "description": "doc_id 不存在" }
+        }
+      },
+      "delete": {
+        "summary": "删除语料文档（删除后不得再被召回）",
+        "parameters": [{ "name": "doc_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "删除成功" },
+          "404": { "description": "doc_id 不存在" }
+        }
+      }
     }
   }
 }

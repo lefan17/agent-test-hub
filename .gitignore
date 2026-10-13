@@ -20,3 +20,11 @@ demo_screenshots/
 .idea/
 .vscode/
 *.swp
+
+# 临时/调试遗留物（不提交）
+.tmp/
+_shim/
+_pipdbg.txt
+_t.py
+_t2.py
+_out*.txt

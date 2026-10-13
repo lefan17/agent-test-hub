@@ -23,8 +23,11 @@ SYSTEM_PLAN_PROMPT = """你是一名资深测试工程师兼 Agent 架构师，�
 1. 覆盖 正向、反向、边界、异常、契约符合性 用例；
 2. API 用例必须给出 method/path/query/body/expected_status；
 3. UI 用例（kind=ui）必须给出 url 和 checks（contains_text / has_element 的 target）；
-4. 契约里写明的状态码要与实现核对——如果怀疑实现不符，也要生成对应契约用例来验证；
-5. 输出 12~20 条用例，id 用 API-xxx / UI-xxx 编号，优先级 P0/P1/P2。"""
+4. RAG 用例（kind=rag）必须给出 rag_query 与 top_k，checks 用 rag_hits_include（配 doc_ids）
+   / rag_rank_monotonic / rag_tie_by_doc_id / rag_no_duplicate / rag_recall_at_least（配 threshold）
+   / rag_mrr_at_least / rag_no_ghost_hit；related 标注文档用 rag_relevant；
+5. 契约里写明的状态码要与实现核对——如果怀疑实现不符，也要生成对应契约用例来验证；
+6. 输出 12~20 条用例，id 用 API-xxx / UI-xxx / RAG-xxx 编号，优先级 P0/P1/P2。"""
 
 SYSTEM_ANALYSIS_PROMPT = """你是一名资深测试工程师。以下是自动化测试失败用例的执行结果：
 {results}
@@ -32,7 +35,7 @@ SYSTEM_ANALYSIS_PROMPT = """你是一名资深测试工程师。以下是自动�
 请逐条分析失败原因，并归类为缺陷。每个缺陷输出：
 - title: 一句话结论
 - severity: critical/high/medium/low
-- category: bug（实现错误）| contract（与契约不符）| flaky（不稳定）| environment（环境问题）| test_issue（用例本身问题）
+- category: bug（实现错误）| contract（与契约不符）| flaky（不稳定）| environment（环境问题）| test_issue（用例本身问题）| relevance（检索相关性/召回质量缺陷）
 - endpoint: 关联接口或页面
 - evidence: 证据摘要（期望 vs 实际）
 - suggestion: 修复建议
@@ -113,7 +116,7 @@ class LLMBrain:
                 id=f"DEF-{i:03d}",
                 title=d.title,
                 severity=d.severity if d.severity in {"critical", "high", "medium", "low"} else "medium",
-                category=d.category if d.category in {"bug", "contract", "flaky", "environment", "test_issue"} else "bug",
+                category=d.category if d.category in {"bug", "contract", "flaky", "environment", "test_issue", "relevance"} else "bug",
                 endpoint=d.endpoint,
                 evidence=d.evidence,
                 suggestion=d.suggestion,

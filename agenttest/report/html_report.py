@@ -28,9 +28,11 @@ TEMPLATE = """<!doctype html>
   h2 { margin: 34px 0 12px; font-size: 18px; border-left: 4px solid #1e3a8a; padding-left: 10px; }
   .defect { background:#fff; border:1px solid var(--line); border-left:4px solid var(--fail); border-radius:10px; padding: 14px 16px; margin-bottom: 12px; }
   .defect.flaky { border-left-color: var(--warn); }
+  .defect.relevance { border-left-color: #0891b2; }
   .defect h3 { margin: 0 0 6px; font-size: 15px; }
   .defect .tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; margin-right:8px; background:#fee2e2; color:#991b1b; }
   .defect.flaky .tag { background:#fef3c7; color:#92400e; }
+  .defect.relevance .tag { background:#cffafe; color:#155e75; }
   .defect p { margin: 4px 0; font-size: 13px; color:#334155; }
   table { width:100%; border-collapse: collapse; background:#fff; border:1px solid var(--line); border-radius: 10px; overflow: hidden; }
   th, td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
@@ -39,6 +41,7 @@ TEMPLATE = """<!doctype html>
   .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; }
   .badge.pass { background:#dcfce7; color:#166534; } .badge.fail { background:#fee2e2; color:#991b1b; }
   .badge.api { background:#e0f2fe; color:#075985; } .badge.ui { background:#ede9fe; color:#5b21b6; }
+  .badge.rag { background:#dcfce7; color:#166534; }
   .trace { background:#0f172a; color:#d1d5db; border-radius: 10px; padding: 16px 18px; font-family: Consolas, monospace; font-size: 12px; line-height: 1.9; overflow-x: auto; }
   .trace .t-pass { color:#4ade80; } .trace .t-fail { color:#f87171; }
   img.shot { max-width: 420px; border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; }
@@ -66,7 +69,7 @@ TEMPLATE = """<!doctype html>
   {% if report.defects %}
   <h2>🐞 发现的缺陷（Agent 归因）</h2>
   {% for d in report.defects %}
-  <div class="defect {{ 'flaky' if d.category == 'flaky' else '' }}">
+  <div class="defect {{ 'flaky' if d.category == 'flaky' else ('relevance' if d.category == 'relevance' else '') }}">
     <h3>{{ d.id }} {{ d.title }}
       <span class="tag">{{ d.severity }} / {{ d.category }}</span>
     </h3>
@@ -87,13 +90,14 @@ TEMPLATE = """<!doctype html>
     <tr>
       <td>{{ c.case_id }}</td>
       <td>{{ c.title }}</td>
-      <td><span class="badge {{ 'ui' if c.kind == 'ui' else 'api' }}">{{ c.kind }}</span></td>
+      <td><span class="badge {{ c.kind }}">{{ c.kind }}</span></td>
       <td>{{ c.expected }}</td>
       <td>{{ c.actual[:120] }}</td>
       <td><span class="badge {{ 'pass' if c.ok else 'fail' }}">{{ 'PASS' if c.ok else 'FAIL' }}</span></td>
       <td>{{ c.duration_ms }}ms</td>
       <td>
         {% if c.error %}<div class="fail" style="font-size:12px">{{ c.error[:200] }}</div>{% endif %}
+        {% if c.metrics %}<div class="muted">指标：{% for k, v in c.metrics.items() %}{{ k }}={{ '%.4f'|format(v) }}{% if not loop.last %}，{% endif %}{% endfor %}</div>{% endif %}
         {% if c.retried %}<div class="warn muted">已重试 {{ c.attempts - 1 }} 次</div>{% endif %}
         {% if c.evidence %}<div class="muted">{{ c.evidence[:200] }}</div>{% endif %}
         {% if c.kind == 'ui' and shot_exists(c.case_id) %}<img class="shot" src="screenshot_{{ c.case_id }}.png" alt="截图">{% endif %}

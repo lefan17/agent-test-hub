@@ -5,6 +5,10 @@
   BUG-API-002  POST /api/todos 空 title 返回 200 并创建脏数据（契约要求 400）
   FLAKY-001    GET /api/flaky 约 10% 概率返回 503（模拟不稳定服务，考验重试机制）
 
+RAG 检索链路（demo_app/rag.py）另注入 6 个缺陷，见该模块 RAG_BUGS：
+  BUG_RAG_CJK_TOKENIZER / BUG_RAG_SORT_ASC / BUG_RAG_NO_TIEBREAK /
+  BUG_RAG_DUPLICATE_HITS / BUG_RAG_STALE_INDEX / BUG_RAG_LOOSE_CONTRACT
+
 契约以 demo_app/openapi.json 为准，代码实现与契约的偏差就是 Agent 要发现的缺陷。
 """
 from __future__ import annotations
@@ -15,6 +19,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from flask import Flask, jsonify, render_template_string, request
+
+from demo_app.rag import RAG_MAX_QUERY_LEN, RAG_MAX_TOP_K, RagService
 
 APP_TITLE = "AgentTest Demo — 智能待办清单"
 APP_VERSION = "1.0.0"
@@ -132,6 +138,8 @@ def create_app() -> Flask:
     app = Flask(__name__)
     store = TodoStore()
     app.config["TODO_STORE"] = store
+    rag = RagService()
+    app.config["RAG_SERVICE"] = rag
 
     # ---------- 契约 ----------
     @app.get("/openapi.json")
@@ -220,6 +228,57 @@ def create_app() -> Flask:
             "active": len([t for t in items if t["status"] == "active"]),
             "done": len([t for t in items if t["status"] == "done"]),
         })
+
+    # ---------- RAG 检索链路 ----------
+    @app.get("/api/rag/index")
+    def rag_index() -> Any:
+        return jsonify(rag.stats())
+
+    @app.get("/api/rag/search")
+    def rag_search() -> Any:
+        top_k, error = rag.validate_search(request.args.get("q"), request.args.get("top_k"))
+        if error:
+            return jsonify({"error": error}), 400
+        hits = rag.search(request.args.get("q") or "", top_k)
+        return jsonify({
+            "query": request.args.get("q") or "",
+            "top_k": top_k,
+            "hits": hits,
+            "index": {"backend": rag.backend.name, "size": rag.size(), "version": rag.version},
+        })
+
+    @app.post("/api/rag/reindex")
+    def rag_reindex() -> Any:
+        version = rag.reindex()
+        return jsonify({"reindexed": True, "version": version, "size": rag.size(),
+                        "backend": rag.backend.name})
+
+    @app.post("/api/rag/docs")
+    def rag_add_doc() -> Any:
+        data = request.get_json(silent=True) or {}
+        doc_id = str(data.get("doc_id") or "").strip()
+        text = str(data.get("text") or "").strip()
+        if not doc_id or not text:
+            return jsonify({"error": "doc_id and text are required"}), 400
+        rag.add_doc(doc_id, text)
+        return jsonify({"data": {"doc_id": doc_id, "text": text}, "version": rag.version}), 201
+
+    @app.patch("/api/rag/docs/<path:doc_id>")
+    def rag_update_doc(doc_id: str) -> Any:
+        data = request.get_json(silent=True) or {}
+        text = str(data.get("text") or "").strip()
+        if not text:
+            return jsonify({"error": "text is required"}), 400
+        if not rag.update_doc(doc_id, text):
+            return jsonify({"error": "document not found"}), 404
+        return jsonify({"data": {"doc_id": doc_id, "text": text}, "version": rag.version})
+
+    @app.delete("/api/rag/docs/<path:doc_id>")
+    def rag_delete_doc(doc_id: str) -> Any:
+        if not rag.remove_doc(doc_id):
+            return jsonify({"error": "document not found"}), 404
+        return jsonify({"deleted": doc_id, "version": rag.version,
+                        "index_size": rag.index_size()})
 
     # ---------- Web 页面 ----------
     @app.get("/")

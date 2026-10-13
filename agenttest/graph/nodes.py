@@ -12,8 +12,11 @@ from typing import Any, Dict, List
 
 from agenttest.brain import BaseBrain, MockBrain
 from agenttest.config import Config
-from agenttest.models import Defect, TestCase, TestReport, TestResult
+from agenttest.models import Check, Defect, TestCase, TestReport, TestResult
 from agenttest.tools import api_request, ui_check
+from agenttest.tools import check_rank_monotonic, check_tie_by_doc_id, find_duplicate_hits
+from agenttest.tools import rag_consistency_probe, rag_search
+from agenttest.tools.rag_metrics import recall_at_k, reciprocal_rank
 from agenttest.tools.ui_tool import UiUnavailableError
 
 
@@ -49,6 +52,8 @@ def make_executor(cfg: Config):
                 attempts += 1
                 if case.kind == "api":
                     last_detail = _run_api_case(case, base_url)
+                elif case.kind == "rag":
+                    last_detail = _run_rag_case(case, base_url)
                 else:
                     last_detail = _run_ui_case(case, base_url, report_dir, cfg)
                 if last_detail["ok"] or attempts >= cfg.max_attempts or not _retryable(_status_of(last_detail)):
@@ -63,7 +68,7 @@ def make_executor(cfg: Config):
                 title=case.title,
                 kind=case.kind,
                 ok=ok,
-                expected=str(case.expected_status) if case.kind == "api" else " ".join(c.target for c in case.checks),
+                expected=_expected_of(case),
                 actual=actual,
                 actual_status=_status_of(last_detail),
                 error=last_detail.get("error", ""),
@@ -72,6 +77,7 @@ def make_executor(cfg: Config):
                 attempts=attempts,
                 retried=retried,
                 notes=last_detail.get("notes", []),
+                metrics=last_detail.get("metrics", {}),
             )
             results.append(result)
             trace.append(f"[executor] {'PASS' if ok else 'FAIL'} {case.id} {case.title} "
@@ -86,6 +92,32 @@ def _status_of(detail: Dict[str, Any]) -> int:
         return int(detail.get("status", 0))
     except (TypeError, ValueError):
         return 0
+
+
+def _expected_of(case: TestCase) -> str:
+    if case.kind == "api":
+        return str(case.expected_status)
+    if case.kind == "rag":
+        labels = "；".join(_check_label(c) for c in case.checks)
+        return f"HTTP {case.expected_status}；{labels}" if labels else f"HTTP {case.expected_status}"
+    return " ".join(c.target for c in case.checks)
+
+
+def _check_label(check: Check) -> str:
+    labels = {
+        "rag_rank_monotonic": "rank 连续且 score 单调非增",
+        "rag_tie_by_doc_id": "并列分数按 doc_id 升序",
+        "rag_no_duplicate": "hits 中无重复 doc_id",
+        "rag_no_ghost_hit": "已删除文档不再被召回",
+        "rag_status": "HTTP 状态码符合契约",
+    }
+    if check.type == "rag_hits_include":
+        return f"命中包含 {','.join(check.doc_ids or [check.target])}"
+    if check.type == "rag_recall_at_least":
+        return f"recall@k>={check.threshold}"
+    if check.type == "rag_mrr_at_least":
+        return f"MRR>={check.threshold}"
+    return labels.get(check.type, check.type)
 
 
 def _run_api_case(case: TestCase, base_url: str) -> Dict[str, Any]:
@@ -108,6 +140,118 @@ def _body_snippet(body: Any, limit: int = 200) -> str:
         return "None"
     text = body if isinstance(body, str) else repr(body)
     return text[:limit]
+
+
+def _run_rag_case(case: TestCase, base_url: str) -> Dict[str, Any]:
+    """执行一条 RAG 检索链路用例。
+
+    两条路径：
+    - 含 rag_no_ghost_hit 断言：跑「新增→召回→删除→再检索」一致性探针（自清理）；
+    - 其余：普通检索，逐条检查 rank 单调 / 并列稳定 / 去重 / 命中包含 / 指标阈值，
+      并把 recall@k 与 MRR 写进 metrics，报告与 pytest 都能直接读。
+    """
+    if any(check.type == "rag_no_ghost_hit" for check in case.checks):
+        return _run_rag_consistency_case(case, base_url)
+
+    detail = rag_search(base_url, case.rag_query, case.top_k)
+    hits = detail["hits"]
+    index_info = detail["index"]
+    metrics = {
+        "recall_at_k": recall_at_k(hits, case.rag_relevant, case.top_k),
+        "mrr": reciprocal_rank(hits, case.rag_relevant),
+        "hit_count": float(len(hits)),
+    }
+    expected_label = _expected_of(case)
+    failures: List[str] = []
+    if detail["status"] != case.expected_status:
+        failures.append(f"状态码期望 {case.expected_status}，实际 {detail['status']}")
+
+    if case.expected_status < 400:
+        for check in case.checks:
+            verdict = _eval_rag_check(check, hits, case)
+            if not verdict["ok"]:
+                failures.append(verdict["detail"])
+
+    status = detail["status"]
+    hit_ids = [h.get("doc_id") for h in hits]
+    ok = not failures
+    return {
+        "ok": ok,
+        "status": status,
+        "actual": (f"{status} hits={hit_ids[:case.top_k]} "
+                   f"recall@{case.top_k}={metrics['recall_at_k']:.4f} MRR={metrics['mrr']:.4f}"),
+        "error": "" if ok else "；".join(failures),
+        "evidence": (f"请求 GET /api/rag/search?q={case.rag_query}&top_k={case.top_k} -> {status}；"
+                     f"hits={[(h.get('doc_id'), h.get('score'), h.get('rank')) for h in hits]}；"
+                     f"index={index_info}；recall@{case.top_k}={metrics['recall_at_k']:.6f}；"
+                     f"MRR={metrics['mrr']:.6f}"),
+        "notes": [f"期望: {expected_label}",
+                  f"检索质量指标 recall@{case.top_k}={metrics['recall_at_k']:.6f}，MRR={metrics['mrr']:.6f}",
+                  f"索引 backend={index_info.get('backend')} size={index_info.get('size')} "
+                  f"version={index_info.get('version')}"],
+        "metrics": metrics,
+    }
+
+
+def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase) -> Dict[str, Any]:
+    if check.type == "rag_hits_include":
+        wanted = list(check.doc_ids or ([check.target] if check.target else []))
+        got = {str(h.get("doc_id")) for h in hits}
+        missing = [doc_id for doc_id in wanted if doc_id not in got]
+        return {"ok": not missing, "detail": f"命中缺少 {missing}（实际 {sorted(got)}）"}
+    if check.type == "rag_rank_monotonic":
+        return check_rank_monotonic(hits)
+    if check.type == "rag_tie_by_doc_id":
+        return check_tie_by_doc_id(hits)
+    if check.type == "rag_no_duplicate":
+        dups = find_duplicate_hits(hits)
+        return {"ok": not dups, "detail": f"hits 中重复出现的 doc_id: {dups}"}
+    if check.type == "rag_recall_at_least":
+        value = recall_at_k(hits, case.rag_relevant, case.top_k)
+        return {"ok": value + 1e-12 >= check.threshold,
+                "detail": f"recall@{case.top_k}={value:.6f} < 阈值 {check.threshold}"}
+    if check.type == "rag_mrr_at_least":
+        value = reciprocal_rank(hits, case.rag_relevant)
+        return {"ok": value + 1e-12 >= check.threshold,
+                "detail": f"MRR={value:.6f} < 阈值 {check.threshold}"}
+    return {"ok": True, "detail": f"未识别的 RAG 断言 {check.type}"}
+
+
+def _run_rag_consistency_case(case: TestCase, base_url: str) -> Dict[str, Any]:
+    probe = rag_consistency_probe(base_url)
+    corpus_ids = set(probe["corpus_doc_ids_after_delete"])
+    ghost_hits = [h for h in probe["hits_after_delete"]
+                  if str(h.get("doc_id")) not in corpus_ids]
+    ghost_ids = [str(h.get("doc_id")) for h in ghost_hits]
+    indexed_after = probe.get("index_size_after_delete")
+    corpus_after = probe.get("corpus_size_after_delete")
+    failures: List[str] = []
+    if not probe["ok"]:
+        failures.append(probe["error"] or "一致性探针调用失败")
+    if ghost_ids:
+        failures.append(f"删除后仍被召回（陈旧索引 ghost hit）: {ghost_ids}")
+    if indexed_after is not None and corpus_after is not None and indexed_after != corpus_after:
+        failures.append(f"index_size={indexed_after} != corpus size={corpus_after}（索引未与语料同步）")
+    metrics = {"ghost_hit_count": float(len(ghost_ids)),
+               "index_size_after_delete": float(indexed_after or 0),
+               "corpus_size_after_delete": float(corpus_after or 0)}
+    ok = not failures
+    return {
+        "ok": ok,
+        "status": probe["status"],
+        "actual": (f"删除后检索 hits={[h.get('doc_id') for h in probe['hits_after_delete']]}，"
+                   f"ghost={ghost_ids}，index_size={indexed_after}/corpus_size={corpus_after}"),
+        "error": "" if ok else "；".join(failures),
+        "evidence": (f"一致性探针：新增 {probe['probe_doc_id']}（{probe['add_status']}）→ "
+                     f"删除前命中 {[h.get('doc_id') for h in probe['hits_before_delete']]} → "
+                     f"删除后语料 {probe['corpus_doc_ids_after_delete']}，再检索命中 "
+                     f"{[h.get('doc_id') for h in probe['hits_after_delete']]}；"
+                     f"reindex -> version {probe['reindex_version']}"),
+        "notes": [f"ghost hit 数={len(ghost_ids)}",
+                  f"index_size={indexed_after}，语料 size={corpus_after}",
+                  f"reindex 后 version={probe['reindex_version']}"],
+        "metrics": metrics,
+    }
 
 
 def _run_ui_case(case: TestCase, base_url: str, report_dir, cfg: Config) -> Dict[str, Any]:
@@ -136,14 +280,21 @@ def _run_ui_case(case: TestCase, base_url: str, report_dir, cfg: Config) -> Dict
                 "error": str(exc), "evidence": "", "notes": ["UI 后端不可用，该用例失败"]}
 
 
+def _coverage_key(case: TestCase) -> str:
+    if case.kind == "api":
+        return f"{case.method.upper()} {case.path}"
+    if case.kind == "rag":
+        return "RAG GET /api/rag/search"
+    return f"UI {case.url}"
+
+
 def make_critic(brain: BaseBrain):
     def critic(state: Dict[str, Any]) -> Dict[str, Any]:
         results = state["results"]
         defects = brain.analyze_failures(results, state["context"])
         coverage: Dict[str, List[str]] = {}
         for case in state["cases"]:
-            ep = f"{case.method.upper()} {case.path}" if case.kind == "api" else f"UI {case.url}"
-            coverage.setdefault(ep, []).append(case.id)
+            coverage.setdefault(_coverage_key(case), []).append(case.id)
         trace = [f"[critic] 失败 {sum(1 for r in results if not r.ok)}/{len(results)}，"
                  f"归因出 {len(defects)} 个缺陷"]
         for d in defects:
