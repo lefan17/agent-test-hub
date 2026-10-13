@@ -34,8 +34,14 @@ jobs:
       # 非 UI 用例：被测系统是本地 Flask Demo，RAG 检索默认后端是纯标准库 BM25，
       # 全程不依赖网络也不依赖浏览器，所以这一组红了就是真坏了，必须拦住流水线。
       # 计数与 README「测试套件」一节声明的一致（--ignore 后 0 failed）。
+      # 为什么必须是 `python -m pytest` 而不是裸 `pytest`：
+      # 本仓库的依赖只装在 requirements.txt 里（不含 `-e .`），被测包 demo_app/agenttest
+      # 没有被装进 site-packages。裸 `pytest` 脚本入口不会把当前目录加进 sys.path，
+      # 于是 tests/conftest.py 的 `from demo_app.app import create_app` 直接
+      # ModuleNotFoundError，整个套件一条都跑不起来（exit code 4）。
+      # `python -m pytest` 会把当前目录加进 sys.path[0]，与 README 里记载的本地命令一致。
       - name: 运行测试套件（121 passed, 15 xfailed, 0 failed）
-        run: pytest -o addopts= -q --ignore=tests/test_ui_tool.py
+        run: python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py
 
       # UI 用例依赖真实 Chrome（tests/test_ui_tool.py 的 4 条）：
       # GitHub 的 ubuntu runner 预装 google-chrome，selenium 4.6+ 会由
@@ -49,4 +55,4 @@ jobs:
       # README 的 `.venv/Scripts/python.exe -m pytest -q` 一一对应。
       - name: 运行全量套件含 UI（121 passed, 15 xfailed, 4 failed：UI 因无 Chrome）
         continue-on-error: true
-        run: pytest -o addopts= -q
+        run: python -m pytest -o addopts= -q
