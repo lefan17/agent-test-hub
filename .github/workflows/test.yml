@@ -208,7 +208,7 @@ jobs:
       #   INSTALL_DEV=0 → 只装运行依赖（跑被测系统）
       #   INSTALL_DEV=1 → 额外装 requirements-dev.txt（跑测试 + 覆盖率）
       - name: 构建运行镜像（INSTALL_DEV=0）
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -219,7 +219,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=runtime
 
       - name: 构建测试镜像（INSTALL_DEV=1）
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
