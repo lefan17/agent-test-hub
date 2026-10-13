@@ -61,5 +61,5 @@ pip-audit==2.10.1
 pip-tools==7.6.2
 
 # 提交信息规范 / 本地钩子（CI commitlint job + pre-commit）
-pre-commit==4.3.0
+pre-commit==4.6.2
 commitizen==4.9.1
