@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装 Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
@@ -122,7 +122,7 @@ jobs:
 
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装 Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
@@ -189,7 +189,7 @@ jobs:
 
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 静态校验：compose 文件语法 + 变量插值 + service 定义是否合法。
       # 这一步不需要 daemon 也能跑，与本地沙箱的验收命令完全一致。
@@ -326,7 +326,7 @@ jobs:
 
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 安装 Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
@@ -390,7 +390,7 @@ jobs:
 
     steps:
       - name: 检出代码（需要完整历史才能取到提交区间）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
