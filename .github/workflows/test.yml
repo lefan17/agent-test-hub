@@ -88,7 +88,7 @@ jobs:
       # 覆盖率报告作为构建产物留档：面试时可以直接下载 XML 佐证数字。
       - name: 上传覆盖率报告
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-xml
           path: coverage.xml
@@ -363,7 +363,7 @@ jobs:
 
       - name: 上传 pip-audit 报告
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pip-audit-report
           path: pip-audit-report.md
