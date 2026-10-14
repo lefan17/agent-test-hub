@@ -1,5 +1,27 @@
 # 依赖清单（由 Dependabot 自动提 PR 更新）
 # 文档：https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# 三条经验，都是踩过之后写的 —— 改这份文件前先读：
+#
+# 1) labels 里的每个名字必须**先在仓库里存在**。
+#    Dependabot 不会替你创建标签：标签缺失时它会在每个 PR 下留一条
+#    "The following labels could not be found" 评论，然后每开一个 PR 就发一封邮件。
+#    2026-10-13 这份配置首次生效，开出 12 个 PR、12 条完全相同的评论，
+#    全部由这一个原因产生。改 labels 之前先跑 `gh label list` 确认同名标签存在。
+#
+# 2) 不要写 reviewers / assignees。
+#    本仓库的协作者只有 owner 一人，请求自己 review 的结果是每个 PR 都发一封
+#    "Review requested" 邮件 —— 而那些邮件里没有任何新信息（PR 本身已经通知过了）。
+#    这类噪声的代价不是"多收几封"，而是让人开始忽略这个邮箱。
+#
+# 3) 主版本升级一律不由机器人提（见下面 pip 的 ignore）。
+#    langchain / langchain-openai / langgraph 三者互相锁版本，单独升一个必然
+#    pip ResolutionImpossible（2026-10-13 实测：requirements.txt 的 line 3/4/5
+#    就是这个三元组，三个 PR 全部红在"安装依赖"这一步）。
+#    更本质的是：本仓库"钉死版本"本身是可复现性的一部分，major 跳变该由人显式
+#    决定并重跑回归，而不是藏在一个看起来例行公事的 bump PR 里。
+#    同一族的 minor/patch 由下面的 langchain-stack 组一次性带上，
+#    避免出现"只升了其中一个"的中间态。
 
 version: 2
 updates:
@@ -12,11 +34,26 @@ updates:
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 5
-    # 同 batch 的补丁级更新合并成一个 PR，避免刷屏
     groups:
+      # ⚠️ 组的顺序有意义：一个依赖同时命中多个组时，Dependabot 只把它放进
+      # **第一个**命中的组（first-match-wins，见官方 options reference）。
+      # 所以「一族必须锁在一起」的具体组要排在通配组**前面** ——
+      # 顺序反了的话，langchain 的 patch 级更新会被 pip-patch 先抓走，
+      # 于是出现「langchain 升了、langgraph 没升」的中间态，
+      # 而这两个包互相锁版本，装不上（2026-10-13 的三个红 PR 就是这个成因）。
+      #
+      # exclude-patterns 是第二道保险：即使将来有人调换顺序，
+      # pip-patch 也不会再碰 langchain 一族。
+      langchain-stack:
+        patterns: ["langchain*", "langgraph*"]
+      # 其余依赖的补丁级更新合并成一个 PR，避免每周刷屏
       pip-patch:
         patterns: ["*"]
         update-types: ["patch"]
+        exclude-patterns: ["langchain*", "langgraph*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
       - "python"
@@ -24,8 +61,6 @@ updates:
       # 与 Conventional Commits 对齐（scripts/check_commit_msg.py 会校验）
       prefix: "chore"
       include: "scope"
-    reviewers:
-      - "lefan17"
 
   # ---------- GitHub Actions（工作流里用到的 action 版本） ----------
   - package-ecosystem: "github-actions"
@@ -36,14 +71,18 @@ updates:
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 5
+    groups:
+      # 这里**不忽略 major**：action 的 major 跳变常常是 node 运行时换代
+      # （v4 → v7 这类），旧引用会直接失效，属于必须跟进的一类。
+      # 但四个 action 分批开 PR 不如合成一个一起验，所以不带 update-types 过滤。
+      actions:
+        patterns: ["*"]
     labels:
       - "dependencies"
       - "github-actions"
     commit-message:
       prefix: "ci"
       include: "scope"
-    reviewers:
-      - "lefan17"
 
   # ---------- npm（commitlint / husky 工具链） ----------
   #
@@ -56,6 +95,11 @@ updates:
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 3
+    groups:
+      # @commitlint/cli 与 @commitlint/config-conventional 必须同版本，
+      # 分开升级会出现 "CLI 21 配 config 19" 这种组合。
+      commitlint:
+        patterns: ["@commitlint/*"]
     labels:
       - "dependencies"
       - "javascript"

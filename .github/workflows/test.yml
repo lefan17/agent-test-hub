@@ -469,10 +469,25 @@ jobs:
             echo "> 该摘要由 notify job 生成，不依赖任何 secret。"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # 只在「本仓库自己的分支/定时任务」上开 issue。
-      # fork PR 的 token 只读，开了也只会 403，所以直接跳过。
+      # 只在 push / 定时任务失败时开 issue，PR 失败不开。
+      #
+      # 为什么排除 PR：PR 失败本来就显示在 PR 页面上，作者正在看那个页面；
+      #   再开一个 issue 等于把同一条信息发第二遍，且每个失败 PR 都会发一封邮件。
+      #   更糟的是 PR 常被 force-push，issue 里的提交号很快就指向一个不存在的状态。
+      #   实测代价：2026-10-13 的 4 个 dependabot PR 各留了一个 issue
+      #   （「CI 失败：5/merge」这类标题），而它们的失败原因完全相同。
+      #   这里与 auto-test-demo 的守卫保持一致。
+      #
+      # fork PR 也一并被排除：其 token 只读，开 issue 必然 403。
+      #
+      # 这里为什么要显式写 `failure()`：GitHub 的默认状态检查是 `success()`，
+      # 而本 job 的前一步（写 Summary）是成功的，只靠 `push || schedule`
+      # 会让这一步在「CI 没失败」时也照开 issue。
+      # 官方对 `failure()` 的定义是「本 job 有先前步骤失败，**或者链上有祖先 job 失败**」
+      # （github/docs: content/actions/reference/workflows-and-actions/expressions.md），
+      # 所以这里同时覆盖了「本 job 自身出问题」与「上游 job 失败」两种情况。
       - name: 自动开/更新失败 issue（内置 GITHUB_TOKEN，零 secret）
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: failure() && (github.event_name == 'push' || github.event_name == 'schedule')
         continue-on-error: true
         uses: actions/github-script@v7
         env:

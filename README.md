@@ -52,7 +52,7 @@
 | 协作模板 | `.github/PULL_REQUEST_TEMPLATE.md`、`.github/ISSUE_TEMPLATE/`、`CODEOWNERS` | 开 PR / issue 时自动带出 |
 | 环境分层 | `scripts/env/{dev,staging,prod}.env`、`agenttest/config.py` | `AGENTTEST_ENV=staging python -m agenttest run` |
 | CI 定时与并发 | `.github/workflows/test.yml` `on.schedule` / `concurrency` | 每周日 19:00 UTC 夜间回归；同 ref 自动取消旧运行 |
-| CI 失败通知 | CI `notify` job | **零 secret**：写 step summary + 用内置 `GITHUB_TOKEN` 自动开 issue |
+| CI 失败通知 | CI `notify` job | **零 secret**：写 step summary + 用内置 `GITHUB_TOKEN` 自动开 issue（仅 `push` / `schedule` 失败时；PR 失败不开，理由见下） |
 
 ### 覆盖率
 
@@ -440,7 +440,10 @@ sequenceDiagram
 - **Python 3.8 能跑吗？** 不行，LangChain/LangGraph 需要 3.9+；本机验证用 Python 3.12。CI 与容器统一用 3.12。
 - **CI 有哪些 job？** 六个：`test`（测试 + 覆盖率门槛）、`lint`（mypy + ruff + 锁文件校验）、`container`（compose 静态校验 + 构建 + 冒烟）、`security`（pip-audit，非阻塞）、`commit-msg`（Conventional Commits）、`notify`（仅在失败时触发）。每个 job 都有 `timeout-minutes` 与 pip 缓存；同分支连续 push 会由 `concurrency` 自动取消旧运行。
 - **为什么 CI 里 `pip-audit` 不阻塞？** 它查的是外部漏洞库，与本次改动的代码质量无关；一条正确的提交也可能隔天因为某个依赖被披露新 CVE 而变红。结果照进日志、step summary 与 artifact，但不拦 PR。需要强迫升级时由 Dependabot 自动开 PR。
-- **CI 失败会通知我吗？** 会。`notify` job 在 `failure()` 时把摘要写进运行页面的 Step Summary，并用仓库内置 `GITHUB_TOKEN` 自动开/更新带 `ci-failure` 标签的 issue——**不需要配置任何 secret**。想接企业微信/钉钉机器人（需要 webhook secret）的做法写在 workflow 的注释里，代码中刻意不引用不存在的 secret。
+- **Dependabot 的配置有哪些坑？** 三条，都写在 `.github/dependabot.yml` 的头部注释里：① `labels` 里的每个名字**必须先在仓库里存在**，否则每个 PR 都会留一条「The following labels could not be found」评论并随之发一封邮件（2026-10-13 因此产生 12 条评论）；② **不要写 `reviewers`**——本仓库只有 owner 一人，请求自己 review 的结果是每个 PR 都发一封「Review requested」邮件；③ `groups` 的顺序有意义：一个依赖命中多个组时只进**第一个**命中的组，所以「必须锁在一起」的组要排在通配组前面，否则 `langchain` 的补丁级更新会被 `pip-patch` 先抓走，出现「只升了 langchain、没升 langgraph」的装不上的中间态。
+- **CI 失败会通知我吗？** 分两种：**运行页面的 Step Summary 一律写**；**issue 只在 `push` 与 `schedule` 失败时开**（`if: failure() && (github.event_name == 'push' || github.event_name == 'schedule')`），用仓库内置 `GITHUB_TOKEN`，**不需要配置任何 secret**。
+  PR 失败不开 issue 是有意的：PR 的 CI 状态本来就显示在 PR 页面上，再开一个 issue 等于把同一条信息发两遍；更糟的是 PR 常被 force-push，issue 里的提交号很快指向一个不存在的状态。
+  实测代价：2026-10-13 的 4 个 dependabot PR 各留了一个 issue（标题形如「CI 失败：5/merge」），失败原因完全相同。想接企业微信/钉钉机器人（需要 webhook secret）的做法写在 workflow 的注释里，代码中刻意不引用不存在的 secret。
 - **为什么同时有 commitlint 和 scripts/check_commit_msg.py？** commitlint 要求本机有 Node + `npm install`；在只有 Python 的机器上就废了。Python 版零依赖，是**降级路径**而非重复劳动，也保证即使移掉 `package.json`，提交规范门禁依然成立。
 - **`ruff format` 为什么没启用？** 实测 `ruff format --check .` → 「35 files would be reformatted, 11 files already formatted」（EXIT=1）。挂进 pre-commit 后任何人 commit 一次就会被强制格式化 35 个业务文件，跨越「只动工程化外壳」的边界。因此本地与 CI 口径一致：只跑 `ruff check`，格式化留作独立任务（见 CHANGELOG 的 Unreleased 段）。
 

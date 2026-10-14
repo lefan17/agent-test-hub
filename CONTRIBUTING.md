@@ -167,7 +167,9 @@ docker compose --profile test up --build --abort-on-container-exit tests
 5. 等 CI 六个 job 全绿：`test` / `lint` / `container` / `security` / `commit-msg`，以及失败时才触发的 `notify`
 6. 等 CODEOWNERS 指定的 reviewer 通过
 
-**CI 失败时**：`notify` job 会把摘要写进运行页面的 Summary，并自动开一个带 `ci-failure` 标签的 issue（使用仓库内置 `GITHUB_TOKEN`，不需要任何 secret）。修好后重新推送，同一 issue 会被追加评论。
+**CI 失败时**：`notify` job 会把摘要写进运行页面的 Summary，并且——**只在 `push` 到分支或 `schedule` 定时回归失败时**——自动开一个带 `ci-failure` 标签的 issue（使用仓库内置 `GITHUB_TOKEN`，不需要任何 secret）。修好后重新推送，同一 issue 会被追加评论。
+
+PR 失败不开 issue：状态本来就显示在 PR 页面上，重复通知只会让人开始忽略这个邮箱。
 
 ---
 
