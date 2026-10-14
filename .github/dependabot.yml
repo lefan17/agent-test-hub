@@ -10,9 +10,19 @@
 #    全部由这一个原因产生。改 labels 之前先跑 `gh label list` 确认同名标签存在。
 #
 # 2) 不要写 reviewers / assignees。
-#    本仓库的协作者只有 owner 一人，请求自己 review 的结果是每个 PR 都发一封
-#    "Review requested" 邮件 —— 而那些邮件里没有任何新信息（PR 本身已经通知过了）。
-#    这类噪声的代价不是"多收几封"，而是让人开始忽略这个邮箱。
+#    两个理由：一是官方已把 `reviewers` 标记为弃用
+#    （dependabot 文档原文："the `reviewers` property is closing down"）；
+#    二是它与 CODEOWNERS 重复 —— review 请求本来就会由 CODEOWNERS 自动产生。
+#
+#    ⚠️ 注意别把因果关系搞反：删掉 `reviewers` **并不会**消掉
+#    "Review requested" 邮件。真正产生它的是仓库根目录的 CODEOWNERS
+#    （本仓库有一条 `*  @lefan17`），它在单人仓库里同样生效。
+#    实测：atd 与 p02 的 dependabot 配置从来没有 `reviewers` 字段，
+#    它们的 PR 一样被 dependabot 请求 review。
+#    要彻底关掉这类邮件只能不放 CODEOWNERS，而那会把"谁负责哪些路径"
+#    这条声明一起丢掉 —— 不值得。
+#    这类噪声的代价不是"多收几封"，而是让人开始忽略这个邮箱，
+#    所以其余能关的噪声（缺标签评论、PR 失败 issue）都已关掉。
 #
 # 3) 主版本升级一律不由机器人提（见下面 pip 的 ignore）。
 #    langchain / langchain-openai / langgraph 三者互相锁版本，单独升一个必然

@@ -82,7 +82,7 @@
 `.github/dependabot.yml` 与 `notify` job 在 2026-10-13 首次真正生效，产生三类可避免的通知噪声：
 
 - **Dependabot 的 `labels` 指向了不存在的标签**：`dependencies` / `github-actions` 等标签在仓库里没有，Dependabot 不会替你创建，于是**每个 PR** 都留一条「The following labels could not be found」评论——24 个 PR 共 24 条完全相同的评论，每条一封邮件。已补齐标签（三仓一致），并在配置头部写明「改 `labels` 之前先跑 `gh label list` 核对」。
-- **`reviewers` 指向自己**：本仓库只有 owner 一人，`reviewers: ["lefan17"]` 让每个 PR 都发一封「Review requested」邮件，而邮件里没有任何新信息。已从三个 ecosystem 全部移除，并把理由写进配置注释。
+- **`reviewers` 指向自己（冗余，非噪声源）**：`reviewers: ["lefan17"]` 已从三个 ecosystem 全部移除，但**这不是「Review requested」邮件的来源**——真正的来源是 `CODEOWNERS`：实测 `atd` 与 `p02` 的 dependabot 配置从来没有 `reviewers` 字段，它们的 PR 一样被请求 review。移除它的理由是官方已把该属性标记为弃用（"the `reviewers` property is closing down"）且与 `CODEOWNERS` 重复声明。**`CODEOWNERS` 在单人仓库里同样生效，所以每开一个 PR 仍会有一封 review 请求邮件 —— 代码侧关不掉。**
 - **`notify` job 在 PR 失败时也开 issue**：`title = "CI 失败：" + ref`，而每个 dependabot PR 的 merge ref 都不同（`5/merge`、`6/merge` …），于是一次失败开一个 issue，4 个 PR 产生 4 个无法去重的 issue。守卫改为 `failure() && (github.event_name == 'push' || github.event_name == 'schedule')`，与 auto-test-demo 的写法对齐。已积的 5 个陈旧 issue（`#1`、`#9`–`#12`）已逐个说明原因后关闭。
 
 配置本身也做了一处顺带修正：`groups` 的**顺序**现在按「具体组在前、通配组在后」排列，因为 Dependabot 是 first-match-wins——顺序反了的话，`langchain` 的补丁级更新会被 `pip-patch` 先抓走，产生「只升 `langchain`、没升 `langgraph`」的中间态，而这两个包互相锁版本、装不上。同时给 `pip-patch` 加了 `exclude-patterns: ["langchain*", "langgraph*"]` 作为第二道保险，并把 pip 的 major 升级整体排除（major 跳变该由人显式决定并重跑回归，不该藏在例行公事的 bump PR 里）。
