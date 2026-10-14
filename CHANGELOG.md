@@ -77,6 +77,29 @@
   **因此不设置 `AGENTTEST_ENV` 时的行为与引入分层之前完全相同**。
 - **`.env.example`** 补上环境分层说明。
 
+### 修复（Dependabot 分组升级的提交标题超长）
+
+Dependabot 的分组升级标题是固定句式，仓库无法控制其长度：
+
+```
+chore(deps): bump the langchain-stack group across 1 directory with 2 updates   ← 77 字符
+chore(deps-dev): bump the commitlint group across 1 directory with 2 updates    ← 76 字符
+ci(deps): bump the actions group across 1 directory with 6 updates              ← 66 字符，擦线通过
+```
+
+前两条撞上本仓自定的 `header-max-length = 72`，CI 的 `commit-msg` job 判红。
+
+**为什么不能简单放宽到 80**：72 是对**人**的约束（`CONTRIBUTING.md` 与
+`scripts/check_commit_msg.py` 的 `SUBJECT_MAX` 同口径），为了迁就机器人放宽，等于对所有人工提交
+一起放松。**为什么是本仓独有的问题**：另一个校验器 `scripts/check_commit_msg.py` 有
+`SKIP_AUTHORS = ("dependabot[bot]", "github-actions[bot]")`，本来就不红；但
+`wagoid/commitlint-github-action@v6` 只拿到提交信息文本、拿不到作者，所以只能在配置侧豁免。
+
+**修法**：`commitlint.config.mjs` 新增 `ignores: [isDependabotGroupBump]`，谓词只匹配
+「分组升级 + `with N updates` 收尾」的完整句式。已用本机真实 `@commitlint/load` +
+`@commitlint/lint` 跑 10 个样本验证边界：三条真实机器标题全部放行，而人工超长 ASCII 标题、
+带尾巴的伪句式、非法 type、大写 scope 仍然照常判失败。`header-max-length` 的取值**一个字未改**。
+
 ### 修复（Dependabot 与失败通知的噪声）
 
 `.github/dependabot.yml` 与 `notify` job 在 2026-10-13 首次真正生效，产生三类可避免的通知噪声：
