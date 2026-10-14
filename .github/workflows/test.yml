@@ -343,10 +343,16 @@ jobs:
       # 这里不要它：本仓库跑的是源码目录（未 pip install -e .），
       # 只要漏洞清单本身能产出就够了。
       #
-      # 注意：这一步在**本机沙箱跑不了** —— pip-audit 会建临时 venv 并写死缓存到
-      # %LOCALAPPDATA%\pip-audit，而沙箱拒绝 ensurepip（WinError 5），
+      # 注意：`pip-audit -r <file>` 在**本机沙箱跑不了** —— pip-audit 会建临时 venv
+      # 并调 ensurepip，而沙箱拒绝（PermissionError: [WinError 5]），
       # `--cache-dir` 也绕不过（解析依赖阶段仍要建 venv）。
-      # 结论：pip-audit 只在本 CI job 里被真实验证，本地从未跑通过。
+      # 但 `pip-audit --local` 能跑（无需建 venv），实测 "Found 21 known
+      # vulnerabilities in 7 packages" —— 本地想自查依赖漏洞可以用它。
+      # 另一个已修的独立缺陷：`-r` 读含中文注释的 requirements*.txt 时，
+      # 内嵌的 pip_requirements_parser 在无 BOM、前两行无 coding 声明时会回退
+      # 到 locale.getpreferredencoding()（简体中文 Windows = cp936）→
+      # UnicodeDecodeError。修法是补 PEP263 首行声明，三个 requirements*.txt 都已补。
+      # 结论：`-r` 路径仍只在本 CI job 里被真实验证。
       - name: pip-audit 扫描 requirements.lock
         continue-on-error: true
         id: audit

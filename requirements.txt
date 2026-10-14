@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # 推荐在 Python 3.10+ 虚拟环境中安装（本仓库在 Python 3.12 上验证）
 # 全部钉死为当前 venv 实测版本，与 pyproject.toml 的 dependencies 逐条一致
 langchain==0.3.30
