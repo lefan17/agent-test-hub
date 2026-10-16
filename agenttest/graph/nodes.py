@@ -21,6 +21,7 @@ from agenttest.tools import api_request, ui_check
 from agenttest.tools import check_rank_monotonic, check_tie_by_doc_id, find_duplicate_hits
 from agenttest.tools import rag_consistency_probe, rag_search
 from agenttest.tools.rag_metrics import recall_at_k, reciprocal_rank
+from agenttest.tools.rag_tool import DOCS_PATH, INDEX_PATH, REINDEX_PATH, SEARCH_PATH
 from agenttest.tools.ui_tool import UiUnavailableError
 
 
@@ -359,12 +360,46 @@ def _run_ui_case(case: TestCase, base_url: str, report_dir, cfg: Config) -> Dict
                 "error": str(exc), "evidence": "", "notes": ["UI 后端不可用，该用例失败"]}
 
 
-def _coverage_key(case: TestCase) -> str:
+# RAG 用例的覆盖端点声明：一条 RAG 用例可能依次打多个端点，coverage 必须把它们都列出来。
+#
+# 旧实现把 10 条 RAG 用例一律记成同一个 "RAG GET /api/rag/search"，于是报告里
+# /api/rag/index、/api/rag/reindex、POST /api/rag/docs、DELETE /api/rag/docs/{doc_id}
+# 全部显示成「没有任何用例覆盖」，而实际打这些端点的正是索引一致性探针用例 RAG-006。
+#
+# 键与 API/UI 分支同构（method + path）。这些字符串是**声明**，可能与 rag_tool 的
+# 实际调用脱节，因此 tests/test_rag_coverage.py 会用真实调用记录去核对：
+# 谁给 rag_tool 加了端点调用却没同步这里，那条测试就会变红。
+# 已知局限：coverage 记录的是「声明这些用例会打哪些端点」，不是执行期实测；若要让它
+# 变成执行事实，需要把端点带进 TestResult 再从 executor 汇总（本次未做）。
+RAG_SEARCH_ENDPOINTS: List[str] = [f"GET {SEARCH_PATH}"]
+RAG_CONSISTENCY_ENDPOINTS: List[str] = [
+    f"GET {INDEX_PATH}",
+    f"POST {DOCS_PATH}",
+    f"DELETE {DOCS_PATH}/{{doc_id}}",
+    f"GET {SEARCH_PATH}",
+    f"POST {REINDEX_PATH}",
+]
+
+
+def _uses_consistency_probe(case: TestCase) -> bool:
+    """这条用例是否走「新增→召回→删除→再检索」的一致性探针。"""
+    return any(check.type == "rag_no_ghost_hit" for check in case.checks)
+
+
+def _coverage_keys(case: TestCase) -> List[str]:
+    """一条用例覆盖的端点键（可能多个，因此返回列表）。
+
+    RAG 分支按用例实际会打的端点展开：一致性探针打 5 个端点，其余检索用例只打
+    /api/rag/search。契约用例（q 为空 / top_k 非法等）同样只打 search，不单独成键
+    ——报告那一列是「端点 / 页面」，键必须名实相符。
+    """
     if case.kind == "api":
-        return f"{case.method.upper()} {case.path}"
+        return [f"{case.method.upper()} {case.path}"]
     if case.kind == "rag":
-        return "RAG GET /api/rag/search"
-    return f"UI {case.url}"
+        if _uses_consistency_probe(case):
+            return list(RAG_CONSISTENCY_ENDPOINTS)
+        return list(RAG_SEARCH_ENDPOINTS)
+    return [f"UI {case.url}"]
 
 
 def make_critic(brain: BaseBrain):
@@ -376,7 +411,8 @@ def make_critic(brain: BaseBrain):
             state["context"]["brain_fallback_reason"] = reason
         coverage: Dict[str, List[str]] = {}
         for case in state["cases"]:
-            coverage.setdefault(_coverage_key(case), []).append(case.id)
+            for key in _coverage_keys(case):
+                coverage.setdefault(key, []).append(case.id)
         trace = [f"[critic] 失败 {sum(1 for r in results if not r.ok)}/{len(results)}，"
                  f"归因出 {len(defects)} 个缺陷"]
         if reason:
