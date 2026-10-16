@@ -120,7 +120,19 @@ class MockBrain:
             if key in seen:
                 continue
             seen.add(key)
-            if r.kind == "rag":
+            if r.actual_status == 0:
+                # 没有拿到任何 HTTP 响应（连不上、超时、连接被重置）。这类失败与被测
+                # 逻辑无关，必须先于下面的业务分支判掉：否则「服务根本没起来」会被
+                # 归因成「契约不符」或「召回质量差」，报告把环境故障写成被测缺陷。
+                defects.append(Defect(
+                    id=f"DEF-{len(defects)+1:03d}",
+                    title="环境不可用：请求未拿到任何 HTTP 响应",
+                    severity="high", category="environment", endpoint=endpoint,
+                    evidence=f"期望 {r.expected}，实际没有响应（status=0）；{r.error}",
+                    suggestion="先确认被测服务已启动、地址与端口可达；网络类失败不应计入被测缺陷，"
+                               "修复环境后重跑再判断逻辑问题",
+                    related_case_ids=[r.case_id]))
+            elif r.kind == "rag":
                 defects.append(self._rag_defect(r, endpoint, len(defects) + 1))
             elif "400" in r.expected and r.actual_status == 500:
                 defects.append(Defect(
@@ -158,6 +170,9 @@ class MockBrain:
 
         判定依据是 executor 写进 error/evidence 的断言失败原文——这保证了
         「归因」与「实际观测到的证据」一致，不是凭空猜测。
+
+        调用方已在进入本函数前处理 `actual_status == 0`（没有响应的环境故障），
+        所以这里看到的都是「服务回答了，但答得不对」。
         """
         detail = f"{r.error} {r.evidence}"
         metrics = f"（recall@k={r.metrics.get('recall_at_k', 0):.4f}，MRR={r.metrics.get('mrr', 0):.4f}）" \
