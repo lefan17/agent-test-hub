@@ -206,6 +206,48 @@ ci(deps): bump the actions group across 1 directory with 6 updates              
   不是配置问题。`.husky/commit-msg` 同样从未真实触发过。
   CI 的 `commit-msg` job 覆盖同一份规则。
 
+### 变更（本轮：文档口径对齐实测 + 降级路径可观测 + 锁文件重生）
+
+> 上一段「### 变更」里写的 `121 passed, 15 xfailed`、覆盖率 `语句 76% / 分支 73.46%`
+> 是**当时**的实测值；本轮测试数增加、覆盖率上移，那些数字已过期。本节给出现值，
+> 上面那段保留原样作为历史记录。
+
+- **测试数字**：148 collected（上一轮 140）。不含 UI 实测 `129 passed, 15 xfailed`；
+  含 UI 为 `4 failed, 129 passed, 15 xfailed`。新增 `tests/test_llm_brain.py`（6 条）
+  与 `tests/test_report.py` 的 2 条，钉住「LLM 调用失败必须降级并如实标注」。
+- **覆盖率**：仓库默认口径（分支覆盖）`TOTAL 1410 stmts / 309 miss / 366 branch = 75.28%`；
+  关掉分支对照 `1415 stmts / 313 miss = 78.09%`。门槛仍取 70。
+  README 的「门槛能拦住什么」反推表按新总数重算：
+  `graph/nodes.py` 整体失守 → 59.5%、`demo_app/rag.py` → 60.1%、`demo_app/app.py` → 64.3%，
+  三个都拦得住；但 `llm_brain.py`（75 行）整体失守仍剩 71.1%，拦不住。
+  诚实结论随之修改：门槛拦得住「大模块整体失守」，拦不住单个中小模块的完全失守。
+- **`docs/` 与 README 的口径修正**：把 `73.46% / 1379 / 121 passed / 140 collected`
+  这一批旧数字统一改为现值（`README.md`、`CONTRIBUTING.md`、`pyproject.toml`、
+  `.github/PULL_REQUEST_TEMPLATE.md`、`.github/workflows/test.yml` 的 step 名、
+  `docs/操作指南.md`、`docs/简历描述.md`、`docs/面试QA.md`、`requirements-dev.txt`）。
+- **删掉两处不实描述**：
+  1. `README.md` 原写「Tool 抽象与 **ReAct** 设计」——代码里 `ReAct` 零命中，
+     `graph/build.py` 是四条直边的确定性流水线（无 `add_conditional_edges`、无回边）。
+     改为「Tool 抽象、LLM 调用失败时的降级与可观测 trace」。
+  2. 三处「本机**无** Chrome」——实测 `C:\Program Files\Google\Chrome\Application\chrome.exe`
+     存在且 `_find_chrome()` 能解析到，是沙箱禁止它启动子进程
+     （`crashpad_client_win.cc:430 OpenProcess: 拒绝访问 (0x5)`），所以是 4 **failed** 不是 skip。
+     同时如实记录 `config.py` 的已知局限：`auto` 后端只看 Chrome **是否存在**，不试运行，
+     因此 Chrome 存在但起不来时不会退回 Selenium。
+- **删掉死配置 `max_plan_rounds`**：`agenttest/config.py` 里它只有「定义」与
+  「从 `AGENTTEST_MAX_PLAN_ROUNDS` 赋值」两处，全仓**零读取点**。
+  留着会被当成「有功能没写完」，故连同 `.env.example` 的那行注释一并删除。
+- **`requirements.lock` 重新生成**：原锁文件停在 `langgraph==0.2.76` /
+  `langchain-openai==0.3.9`，而 `requirements.txt` 已要求 `0.6.11` / `0.3.35`，
+  漂移两个 minor（`openai` 1.109.1 → 2.54.0 亦未跟上）。
+  现按 `pip-compile --no-emit-index-url --no-emit-trusted-host --strip-extras` 重生成，
+  228 行 / 71 个包，`requirements.txt` 的 8 条 pin 全部命中且一致。
+  同时把 README 里「由 CI 的 **deps-lock** job 校验与 requirements.txt 不漂移」
+  改为事实：**没有 deps-lock job**，CI 只在 `lint` job 里做「文件存在 + 每行是合法 pin」
+  的轻量校验，不重新解析依赖树（那需要联网访问 PyPI）。
+- **`.github/workflows/test.yml`**：两处 step 名与一处注释里的旧数字同步为 `129 passed`；
+  「本地沙箱无 Chrome」改为「Chrome 存在但启不了子进程」。
+
 ---
 
 ## 2026-10-13

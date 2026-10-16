@@ -19,20 +19,20 @@
 | 视角 | 体现的能力 | 对应简历点 |
 | --- | --- | --- |
 | **软件测试工程师** | 测试用例设计（正/反/边界/契约）、缺陷发现与归因、测试报告、pytest 工程化、OpenAPI 契约测试、Flaky 处理、RAG 检索质量评测（recall@k / MRR） | 接口自动化、UI 自动化、检索评测、测试框架搭建、缺陷管理 |
-| **Agent 开发工程师** | LangGraph 状态机编排、LangChain 结构化输出、Tool 抽象与 ReAct 设计、LLM 降级方案、可观测 trace、确定性工具设计 | Agent 框架使用、Prompt 工程、LLM 应用落地、系统设计、RAG 链路工程 |
+| **Agent 开发工程师** | LangGraph 状态机编排、LangChain 结构化输出、Tool 抽象、LLM 调用失败时的降级与可观测 trace、确定性工具设计 | Agent 框架使用、Prompt 工程、LLM 应用落地、系统设计、RAG 链路工程 |
 
 ## 核心特性
 
-- **契约驱动**：从被测系统 `/openapi.json` 读取 OpenAPI 规范，自动生成/推导测试用例
+- **契约驱动**：从被测系统 `/openapi.json` 读取 OpenAPI 规范并摘要后交给 Brain 生成测试用例；`LLMBrain` 路径按契约生成，`MockBrain` 路径是固定的 28 条模板（不读 spec，保证离线确定性）
 - **API + UI + RAG 三覆盖**：接口断言 + 真实浏览器（Chrome 无头）渲染断言与截图 + 检索链路质量断言（recall@k / MRR / 排序 / 去重 / 索引一致性）
 - **检索质量可量化**：RAG 用例产出 recall@k 与 MRR 具体数值写入报告证据，可被 pytest 断言
-- **智能缺陷归因**：失败用例由 Brain（LLM 或规则引擎）自动归类为 bug / contract / flaky / environment / relevance
+- **智能缺陷归因**：失败用例由 Brain（LLM 或规则引擎）自动归类为 bug / contract / flaky / environment / test_issue / relevance 六类；规则引擎实际产出 bug / contract / flaky / test_issue / relevance 五类，`environment` 保留给 LLM 归因
 - **自动重试**：对 5xx / 网络异常自动重试（指数退避），区分「不稳定」与「真缺陷」
 - **双 Brain 可切换**：`MockBrain`（规则引擎，离线可跑、演示确定性）+ `LLMBrain`（LangChain 结构化输出，接 DeepSeek/OpenAI/通义等）
-- **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、证据与截图
+- **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、缺陷证据与截图（截图仅在 UI 用例真正跑通时产生）、以及「本轮是否降级为规则引擎」的显式声明
 - **自带被测系统**：Flask Demo 应用注入 2 个 API 契约缺陷 + 1 处 Flaky 注入 + 6 个 RAG 检索缺陷开关（覆盖 9 个缺陷面），Agent 演示「发现缺陷」而非「跑一遍全绿」
 - **零新增依赖**：RAG 检索默认后端用纯标准库实现 BM25（`demo_app/rag.py`），不引入 rank_bm25 / jieba / numpy 等任何检索库，离线确定性可回归
-- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率门槛（实测分支覆盖 73.46% / 门槛 70%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
+- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率门槛（实测分支覆盖 75.28% / 门槛 70%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
 
 ## 工程化能力
 
@@ -45,7 +45,7 @@
 | 静态类型 | `pyproject.toml [tool.mypy]`、CI `lint` job | `python -m mypy` → `Success: no issues found in 24 source files` |
 | 代码规范 | `pyproject.toml [tool.ruff]`、CI `lint` job、pre-commit | `python -m ruff check .` → `All checks passed!` |
 | 漏洞扫描 | `.github/dependabot.yml`、CI `security` job | `pip-audit -r requirements.lock`（**非阻塞**，理由见下） |
-| 依赖锁文件 | `requirements.lock`（pip-tools 生成）、CI 校验步骤 | `python -m piptools compile requirements.txt -o requirements.lock` |
+| 依赖锁文件 | `requirements.lock`（pip-tools 生成）、CI `lint` job 的格式校验步骤 | `python -m piptools compile requirements.txt -o requirements.lock` |
 | 依赖分层 | `requirements.txt`（运行）/ `requirements-dev.txt`（工程化） | 镜像用 `ARG INSTALL_DEV=0/1` 切换 |
 | 本地钩子 | `.pre-commit-config.yaml` | `python -m pre-commit run --all-files` |
 | 提交规范 | `commitlint.config.mjs`、`.husky/commit-msg`、`scripts/check_commit_msg.py` | 见 [CONTRIBUTING.md](CONTRIBUTING.md#3-提交信息规范conventional-commits) |
@@ -59,25 +59,27 @@
 实测命令与结果（本机 `.venv`，Python 3.12.10）：
 
 ```bash
-# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1379 stmts / 330 miss / 354 branch = 73.46%
+# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1410 stmts / 309 miss / 366 branch = 75.28%
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing
 
-# 对照：关掉分支覆盖（临时 --cov-config）→ TOTAL 1381 stmts / 331 miss = 76%
-# 分支覆盖默认比语句覆盖低约 2.5 个百分点，换来的信息量更大，因此默认开着。
+# 对照：关掉分支覆盖（临时 --cov-config，内容只有 [run] branch = false）
+#   → TOTAL 1415 stmts / 313 miss = 78.09%
+# 分支覆盖默认比语句覆盖低约 2.8 个百分点，换来的信息量更大，因此默认开着。
 ```
 
-**CI 门槛取 70**，理由：低于两条实测口径（语句覆盖 76% / 分支覆盖 73.46%），留约 3.4 个百分点的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么，按当前总数（1379 语句 + 354 分支，分子 ≈1273）反推如下——**实测口径，不是估算**：
+**CI 门槛取 70**，理由：低于两条实测口径（语句覆盖 78.09% / 分支覆盖 75.28%），留约 5.3 个百分点的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么，按当前总数（1410 语句 + 366 分支）反推如下——**实测口径，不是估算**：
 
 | 假设的退化 | 反推覆盖率 | 是否击穿 70 |
 | --- | --- | --- |
-| `agenttest/graph/nodes.py` 整体失去覆盖 | 69.9% | ✅ 拦得住 |
-| `demo_app/rag.py`（264 行）整体失去覆盖 | 71.1% | ❌ 拦不住 |
-| `demo_app/app.py`（180 行）整体失去覆盖 | 71.3% | ❌ 拦不住 |
+| `agenttest/graph/nodes.py`（234 行）整体失去覆盖 | 59.5% | ✅ 拦得住 |
+| `demo_app/rag.py`（264 行）整体失去覆盖 | 60.1% | ✅ 拦得住 |
+| `demo_app/app.py`（180 行）整体失去覆盖 | 64.3% | ✅ 拦得住 |
+| `agenttest/brain/llm_brain.py`（75 行）整体失去覆盖 | 71.1% | ❌ 拦不住 |
 
-**诚实结论：70 这个门槛只能拦住「大模块 + 大丢失」的组合，拦不住单个中等模块的完全失守。** 之所以不往上抬到 75：那会把门槛压到实测值（73.46%）之上，CI 首次运行就是红的，只能靠删测试或写无意义测试来凑，属于自欺。真正能拦住单模块退化的手段是**每文件门槛**（`[tool.coverage.report]` 的 per-file `fail_under`，或 Codecov 的 patch coverage），本仓库尚未启用，已记入 CHANGELOG 的 Unreleased 段作为后续任务。
+**诚实结论：70 这个门槛能拦住「大模块整体失守」（上表三个都拦得住），但拦不住单个中小模块的完全失守（`llm_brain.py` 丢掉全部 75 行仍剩 71.1%）。** 之所以不往上抬：那会把门槛压到分支口径实测值（75.28%）之上，CI 首次运行就是红的，只能靠删测试或写无意义测试来凑，属于自欺。真正能拦住单模块退化的手段是**每文件门槛**（`[tool.coverage.report]` 的 per-file `fail_under`，或 Codecov 的 patch coverage），本仓库尚未启用，已记入 CHANGELOG 的 Unreleased 段作为后续任务。
 
-> 门槛还刻意留出了实测抖动幅度：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），本机多轮实测在 **73.46% ~ 73.56%** 之间波动。门槛压到 73 就会间歇性变红，而间歇性红最终一定会被人用重跑糊过去。
+> 门槛还刻意留出了抖动幅度：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`）。本机最近 3 次连跑都是 **75.28%**（未观察到抖动），但门槛取 70 也是为了在这种抖动真的出现时不至于间歇性变红——间歇性红最终一定会被人用重跑糊过去。
 
 覆盖率短板（`--cov-report=term-missing` 实测，按缺失语句数排序）：
 
@@ -85,9 +87,9 @@
 | --- | --- | --- |
 | `agenttest/runner.py` | **0%**（122 行全未覆盖） | CLI 入口与退出路径。测试套件直接调用 `build_context()`/图节点，不 fork 子进程跑 CLI |
 | `agenttest/config.py` | 40% | 环境分层的档案读取与 `pick_int` 异常分支：既有测试不设置 `AGENTTEST_ENV`/`AGENTTEST_MAX_ATTEMPTS`，走不到 |
-| `agenttest/tools/spec_tool.py` | 18% | 需要真实 HTTP 拉取 `/openapi.json`；端到端用例只覆盖了它的一部分 |
-| `agenttest/brain/llm_brain.py` | 43% | LLM 联网分支，无 API Key 时根本不进入（这是设计上的降级路径，不是遗漏） |
-| `agenttest/tools/ui_tool.py` | 71% | Chrome 无头 / Selenium 分支，本机无 Chrome 时走不到 |
+| `agenttest/tools/ui_tool.py` | 71% | Chrome 无头 / Selenium 分支：本机装了 Chrome，但沙箱禁止它启动子进程，两条分支都走不到 |
+| `agenttest/tools/spec_tool.py` | 32% | 需要真实 HTTP 拉取 `/openapi.json`；端到端用例只覆盖了它的一部分 |
+| `agenttest/brain/llm_brain.py` | 88% | 联网调用与结构化解析那几行；失败降级路径有单测覆盖（见 `tests/test_llm_brain.py`） |
 
 其余模块普遍 80%~100%（`models.py`、`rag_metrics.py`、`graph/*` 均接近满分）。`agenttest/__main__.py` 是 3 行 CLI 薄壳，已在 `[tool.coverage.run] omit` 中排除——单独跑它没有断言价值。
 
@@ -105,28 +107,28 @@
 | `pip-audit` | **未验证** | 需创建临时虚拟环境，沙箱拒绝 `ensurepip`（`PermissionError: [WinError 5]`）；且它把缓存写死在 `%LOCALAPPDATA%\pip-audit`，`--cache-dir` 也绕不过。仅在 CI 的 `security` job 里被真实验证。配置已就位，本地从未跑通。 |
 | `pre-commit` | **未验证** | 同上（hook 需要独立虚拟环境）。配置仅通过 `yaml.safe_load` 静态语法校验；等价检查由 CI 的 `lint` job 承担。 |
 | `commitlint` 完整 CLI | **未验证** | `npm install` 已走本机代理成功（`node_modules/` 存在），`commitlint.config.mjs` 的语法与规则已用真实 `@commitlint/load` + `@commitlint/lint` 验证（7 个用例全部符合预期）。但 commitlint CLI 会 spawn `git` 取提交信息，沙箱命名管道限制让 `spawn` 报 `Error: spawn EPERM`——沙箱边界，非配置问题。`.husky/commit-msg` 同样未真实触发。CI 的 `commit-msg` job 覆盖同一份规则。 |
-| `requirements-dev.txt` 钉的两个版本 | **无法核对** | `pre-commit==4.3.0` 与 `commitizen==4.9.1` **本机从未安装过**（沙箱拒绝建 venv），版本号无法核对。其余六个包（pytest-cov / coverage / ruff / mypy / pip-audit / pip-tools）已用 `importlib.metadata` + `pip show` 双口径实测，**与钉版逐条一致**（详见该文件顶部核对表）。另：本机这三个包是从同机另一个 3.12 venv 复制到 `site-packages` 的，不是 `pip install` 进来的——「覆盖率 73.46%」「ruff 全绿」是真跑出来的，但 CI 能否解析安装这些版本号，只能等 CI 首次运行。 |
+| `requirements-dev.txt` 钉的两个版本 | **无法核对** | `pre-commit==4.3.0` 与 `commitizen==4.9.1` **本机从未安装过**（沙箱拒绝建 venv），版本号无法核对。其余六个包（pytest-cov / coverage / ruff / mypy / pip-audit / pip-tools）已用 `importlib.metadata` + `pip show` 双口径实测，**与钉版逐条一致**（详见该文件顶部核对表）。另：本机这三个包是从同机另一个 3.12 venv 复制到 `site-packages` 的，不是 `pip install` 进来的——「覆盖率 75.28%」「ruff 全绿」是真跑出来的，但 CI 能否解析安装这些版本号，只能等 CI 首次运行。 |
 
 
 ## 测试套件
 
-采集数 **140**（不含 UI 时 136 = 121 passed + 15 xfailed；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（PowerShell 5.1 / Python 3.12.10）：
+采集数 **148**（不含 UI 时 144 = 129 passed + 15 xfailed；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（PowerShell 5.1 / Python 3.12.10）：
 
 ```bash
-# 全量（含 UI）：本机无 Chrome → 4 failed
-.venv/Scripts/python.exe -m pytest -q            # 121 passed, 15 xfailed, 4 failed
+# 全量（含 UI）：Chrome 存在但沙箱禁止其启动子进程 → 4 failed
+.venv/Scripts/python.exe -m pytest -q            # 129 passed, 15 xfailed, 4 failed
 
 # 不含 UI：CI 的阻塞口径
-.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 121 passed, 15 xfailed, 0 failed
+.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 129 passed, 15 xfailed, 0 failed
 
 # 带覆盖率门槛（CI test job 同一条命令）
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing --cov-fail-under=70
-#   → 121 passed, 15 xfailed, 1 warning；TOTAL 1379 stmts / 330 miss / 354 branch = 73.46%
+#   → 129 passed, 15 xfailed, 1 warning；TOTAL 1410 stmts / 309 miss / 366 branch = 75.28%
 #   → Required test coverage of 70.0% reached.
 ```
 
-> `-o addopts=` 不能省：`pyproject.toml` 里 `addopts = "-q"`，而 `-q` 会把末尾的 `121 passed, ...` 汇总行一起吞掉；命令行覆盖为空之后计数才会出现在输出与 CI 日志里。
+> `-o addopts=` 不能省：`pyproject.toml` 里 `addopts = "-q"`，而 `-q` 会把末尾的 `129 passed, ...` 汇总行一起吞掉；命令行覆盖为空之后计数才会出现在输出与 CI 日志里。
 
 | 文件 | 条数 | 覆盖 |
 | --- | --- | --- |
@@ -135,13 +137,14 @@
 | `tests/test_rag_tool.py` | 26（18 passed + 8 xfail） | RAG 工具层 + 端点契约缺陷基准（空 q / 非法 top_k / 超长 q 应 400） |
 | `tests/test_rag_sut.py` | 30（25 passed + 5 xfail） | RAG 端点功能、语料增删改（含覆盖写入）、索引一致性、并发读写、缺陷复现 + 正确实现对照组 |
 | `tests/test_checks.py` | 16 | executor 断言求值层：API 双断言、rag_status、未实现断言必须失败（RAG/API/UI 三处）、指数退避 |
+| `tests/test_llm_brain.py` | 6 | LLM 调用失败 / 畸形输出 / 空计划时必须降级为规则引擎而不是崩掉（用假 `_chat` 注入，不需要真 Key） |
 | `tests/test_api_tool.py` | 4 | 接口工具集成 |
 | `tests/test_mock_brain.py` | 5 | 规划与归因 |
-| `tests/test_report.py` | 1 | 报告渲染 |
+| `tests/test_report.py` | 3 | 报告渲染（含「降级必须在报告里可见」） |
 | `tests/test_runner_e2e.py` | 1 | 端到端（必须发现 contract+bug 缺陷） |
-| `tests/test_ui_tool.py` | 4 | UI 工具（**需本机 Chrome，无浏览器环境会失败**） |
+| `tests/test_ui_tool.py` | 4 | UI 工具（**需能真正启动的 Chrome，本沙箱会失败**） |
 
-15 项 xfail 是**缺陷基准**：用 `@pytest.mark.xfail(strict=True)` 包住「断言契约期望行为」的用例——缺陷存在则 xfail，缺陷被修好会 XPASS 报错提醒更新基准。另有「钉住当前实际行为」的用例直接断言缺陷现状。4 条 UI 失败是已知环境限制（本机无 Chrome），与本次改动无关。
+15 项 xfail 是**缺陷基准**：用 `@pytest.mark.xfail(strict=True)` 包住「断言契约期望行为」的用例——缺陷存在则 xfail，缺陷被修好会 XPASS 报错提醒更新基准。另有「钉住当前实际行为」的用例直接断言缺陷现状。4 条 UI 失败是已知环境限制：本机**装了** Chrome（`C:\Program Files\Google\Chrome\Application\chrome.exe`，`effective_ui_backend` 解析为 `chrome`），但沙箱禁止它启动子进程（`crashpad_client_win.cc:430 OpenProcess: 拒绝访问 (0x5)`），所以是 4 failed 而不是 4 skipped。
 
 ## 架构
 
@@ -414,7 +417,7 @@ sequenceDiagram
 │  ├─ report/            # HTML 报告渲染
 │  ├─ config.py / models.py / runner.py   # config.py 含 dev/staging/prod 环境分层
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（140 collected：121 passed + 15 缺陷基准 xfail + 4 UI 需浏览器）
+├─ tests/                # 项目自身 pytest（148 collected：129 passed + 15 缺陷基准 xfail + 4 UI 需浏览器）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示
 │  ├─ check_commit_msg.py  # 零依赖的 Conventional Commits 校验（无 Node 环境的降级路径）
@@ -425,7 +428,7 @@ sequenceDiagram
 ├─ Dockerfile / docker-compose.yml / .dockerignore   # 容器化（app / test 两个 profile）
 ├─ requirements.txt      # 运行依赖（全 == 钉死）
 ├─ requirements-dev.txt  # 工程化依赖（在其之上叠加 pytest-cov / mypy / ruff / pip-audit / pre-commit）
-├─ requirements.lock     # pip-tools 生成的完整锁文件
+├─ requirements.lock     # pip-tools 生成的完整锁文件（CI 的 lint job 只校验「存在 + 每行是合法 pin」，不重新解析依赖树）
 ├─ pyproject.toml        # 打包元数据 + [tool.mypy] / [tool.ruff] / [tool.coverage.*]
 ├─ .pre-commit-config.yaml / commitlint.config.mjs
 └─ README.md / CONTRIBUTING.md / CHANGELOG.md / CODEOWNERS
@@ -433,7 +436,7 @@ sequenceDiagram
 
 ## 常见问题
 
-- **没有 Chrome 会怎样？** UI 用例会失败并在报告中标注「UI 后端不可用」，API 与 RAG 用例照常；也可 `--no-ui` 跳过。
+- **没有 Chrome / Chrome 起不来会怎样？** UI 用例会失败并在报告中标注「UI 后端不可用」，API 与 RAG 用例照常；也可 `--no-ui` 跳过。注意 `auto` 后端只看 Chrome **是否存在**（`config.py` 的 `_find_chrome()` 是 `Path.exists()`），Chrome 存在但被沙箱禁止启动时不会退回 Selenium。
 - **UI 自动化为什么不用 Selenium/Playwright？** 项目默认用系统 Chrome 无头模式（`--dump-dom` + 截图），零驱动零下载；同时内置 Selenium 后端，`--ui-backend selenium` 可切换，体现多方案能力。
 - **RAG 为什么要自己实现 BM25？** 为了不引入任何第三方依赖、保证离线确定性可回归；embedding 后端是可选增强，缺 Key 自动降级，不影响 CI。
 - **怎么把 MockBrain 换成真 LLM？** 配置 `AGENTTEST_LLM_*` 环境变量后加 `--force-llm`。
