@@ -40,9 +40,15 @@ SYSTEM_ANALYSIS_PROMPT = """你是一名资深测试工程师。以下是自动�
 - severity: critical/high/medium/low
 - category: bug（实现错误）| contract（与契约不符）| flaky（不稳定）| environment（环境问题）| test_issue（用例本身问题）| relevance（检索相关性/召回质量缺陷）
 - endpoint: 关联接口或页面
+- case_ids: 该缺陷对应的失败用例 id 列表，**只能从上面 results 里出现过的 case_id 中挑**，
+  一条缺陷只列真正由它解释的那些用例；编造 id 或把全部失败用例都列上都会被下游丢弃
 - evidence: 证据摘要（期望 vs 实际）
 - suggestion: 修复建议
 请合并同类失败，输出 1~5 个缺陷。"""
+
+# 用例 id 前缀 → TestCase.kind。仓库里编号规则就是「前缀即类型」，
+# MockBrain 生成的 endpoint 同样是 "<KIND> <title>"，因此两处都能据此还原 kind。
+_CASE_KINDS = {"API": "api", "UI": "ui", "RAG": "rag"}
 
 
 class _PlanResult(BaseModel):
@@ -54,6 +60,8 @@ class _DefectDraft(BaseModel):
     severity: str = "medium"
     category: str = "bug"
     endpoint: str = ""
+    case_ids: List[str] = Field(default_factory=list,
+                               description="该缺陷对应的失败用例 id，必须来自本次失败结果")
     evidence: str = ""
     suggestion: str = ""
 
@@ -61,6 +69,69 @@ class _DefectDraft(BaseModel):
 class _AnalysisResult(BaseModel):
     summary: str = Field(default="", description="失败分析一句话总结")
     defects: List[_DefectDraft] = Field(default_factory=list, description="缺陷列表")
+
+
+def _kind_of_case_id(case_id: str) -> str:
+    """按用例 id 前缀还原本条用例的 kind（API-xxx / UI-xxx / RAG-xxx）。"""
+    return _CASE_KINDS.get(str(case_id).split("-", 1)[0].upper(), "")
+
+
+_HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+
+
+def _kind_of_endpoint(endpoint: str) -> str:
+    """从 endpoint 推断缺陷指向的类型。
+
+    MockBrain 产出形如 `RAG 检索召回`；LLM 自报的 endpoint 是自由文本，常见形状是
+    `GET /api/todos` 或 `/api/todos`——带 HTTP 方法或写成路由的端点只可能是 API，
+    UI 页面与 RAG 检索都不会长这样。
+    """
+    text = str(endpoint or "").strip()
+    head = text.split(" ", 1)[0].upper()
+    if head in _CASE_KINDS:
+        return _CASE_KINDS[head]
+    if text.startswith("/") or head in _HTTP_METHODS:
+        return "api"
+    return ""
+
+
+def _resolve_related_case_ids(declared: List[str], failed: List[TestResult], endpoint: str) -> List[str]:
+    """把 LLM 自报的 case_ids 变成可信的关联用例列表。
+
+    旧实现给每个缺陷挂上本次**全部**失败用例，于是「检索排序缺陷」也关联着与它
+    毫无关系的契约用例——关联退化成噪声：报告里每个缺陷那一栏都一模一样。
+
+    三步：
+      1. 白名单：只保留本次真失败过的 case_id（LLM 编造的 id 一律丢弃）；
+      2. 自报有效就用自报的（保留 LLM 的语义判断）；
+      3. 自报为空或全被滤掉时，**不退回全部失败用例**（那正是被修的缺陷），
+         而是收窄到该缺陷同 kind 的失败用例：先看 endpoint（`RAG 检索` 这类前缀，
+         或 `GET /api/todos` 这类只可能是 API 的形状），再看它自报 id 的前缀
+         （编造的 id 也保留了类型前缀），最后看失败用例是否只有一种 kind。
+         kind 无从判断时留空——空列表是「关联用例未知」，错挂是「关联用例是错的」。
+    """
+    whitelist = {r.case_id for r in failed}
+    kept: List[str] = []
+    for case_id in declared or []:
+        cid = str(case_id).strip()
+        if cid in whitelist and cid not in kept:
+            kept.append(cid)
+    if kept:
+        return kept
+
+    kind = _kind_of_endpoint(endpoint)
+    if not kind:
+        for case_id in declared or []:
+            kind = _kind_of_case_id(case_id)
+            if kind:
+                break
+    if not kind:
+        kinds = {r.kind for r in failed}
+        kind = kinds.pop() if len(kinds) == 1 else ""
+    if not kind:
+        logger.warning("[llm_brain] 缺陷 %r 未能确定所属类型，关联用例留空而不是挂上全部失败用例", endpoint)
+        return []
+    return [r.case_id for r in failed if r.kind == kind]
 
 
 class LLMBrain:
@@ -152,6 +223,7 @@ class LLMBrain:
                 endpoint=d.endpoint,
                 evidence=d.evidence,
                 suggestion=d.suggestion,
-                related_case_ids=[r.case_id for r in failed],
+                related_case_ids=_resolve_related_case_ids(
+                    list(getattr(d, "case_ids", []) or []), failed, d.endpoint),
             ))
         return defects
