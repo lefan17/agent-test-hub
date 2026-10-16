@@ -87,7 +87,6 @@ class Config:
     chrome_path: str = ""
     report_dir: Path = field(default_factory=lambda: Path("reports"))
     max_attempts: int = 3             # 失败/不稳定用例重试次数
-    max_plan_rounds: int = 2          # planner 最多可追加计划的轮数
     workdir: Path = field(default_factory=Path.cwd)
     env: str = DEFAULT_ENV            # 当前配置档案：dev | staging | prod
 
@@ -141,6 +140,5 @@ class Config:
             chrome_path=pick("AGENTTEST_CHROME_PATH"),
             report_dir=Path(pick("AGENTTEST_REPORT_DIR", "reports")),
             max_attempts=pick_int("AGENTTEST_MAX_ATTEMPTS", 3),
-            max_plan_rounds=pick_int("AGENTTEST_MAX_PLAN_ROUNDS", 2),
             env=env_name,
         )
