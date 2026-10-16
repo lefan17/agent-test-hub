@@ -482,7 +482,7 @@ jobs:
       #   更糟的是 PR 常被 force-push，issue 里的提交号很快就指向一个不存在的状态。
       #   实测代价：2026-10-13 的 4 个 dependabot PR 各留了一个 issue
       #   （「CI 失败：5/merge」这类标题），而它们的失败原因完全相同。
-      #   这里与 auto-test-demo 的守卫保持一致。
+      #   这里与 fullstack-test-framework 的守卫保持一致。
       #
       # fork PR 也一并被排除：其 token 只读，开 issue 必然 403。
       #
