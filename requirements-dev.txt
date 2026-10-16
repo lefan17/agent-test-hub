@@ -8,7 +8,7 @@
 # ⚠️ 一处口径差异需知悉：pytest-cov / coverage / ruff 三个包**不是**从 PyPI
 #   pip install 进来的（本开发沙箱网络不可达），而是从同机另一个 Python 3.12
 #   虚拟环境复制到 .venv\Lib\site-packages 的。也就是说：
-#     - 「本地实测覆盖率 75.28%」「ruff check 全通过」是**真跑出来的结果**；
+#     - 「本地实测覆盖率 76.88%」「ruff check 全通过」是**真跑出来的结果**；
 #     - 但本行钉死的版本号能否被 CI 的 `pip install -r requirements-dev.txt`
 #       成功解析安装，**本机无法验证**（pip 装任何包都会挂起）。
 #   CI 首次运行时若报「找不到该版本」，按实际可用版本调整本文件即可，

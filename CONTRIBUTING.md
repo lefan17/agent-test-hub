@@ -27,7 +27,7 @@ python -m venv .venv
 ## 2. 提交前必须自测（与 CI 同一条命令）
 
 ```bash
-# 测试套件（不含 UI），期望：135 passed, 15 xfailed, 0 failed
+# 测试套件（不含 UI），期望：161 passed, 15 xfailed, 0 failed
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py
 
 # 类型检查，期望：Success: no issues found
@@ -45,7 +45,7 @@ python -m venv .venv
 
 ### ⚠️ `-o addopts=` 是干什么的
 
-`pyproject.toml` 里设了 `addopts = "-q"`，而 `-q` 会连同末尾的 `135 passed, ...` 汇总行一起吞掉。命令行传 `-o addopts=` 把配置值覆盖为空，计数才会出现在输出（以及 CI 日志）里。覆盖率参数同理一律走命令行，不塞进 `addopts`。
+`pyproject.toml` 里设了 `addopts = "-q"`，而 `-q` 会连同末尾的 `161 passed, ...` 汇总行一起吞掉。命令行传 `-o addopts=` 把配置值覆盖为空，计数才会出现在输出（以及 CI 日志）里。覆盖率参数同理一律走命令行，不塞进 `addopts`。
 
 ---
 
@@ -149,7 +149,7 @@ docker compose --profile test up --build --abort-on-container-exit tests
 
 1. **不改业务逻辑**：`demo_app/` 的 9 个注入缺陷是**被测对象**，不是 bug。想「顺手修好」会直接让 15 条 xfail 基准集体 XPASS 失败——那是故意的警报，不是可以忽略的噪音。
 2. **不改既有测试的断言**：`tests/**` 的断言是回归网。要改测试，请在 PR 里说明**为什么原断言是错的**。
-3. **覆盖率门槛不许为了让 PR 变绿而下调**：`--cov-fail-under` 的值来自实测（语句覆盖 78.29% / 分支覆盖 75.87%），门槛取 70。它拦住的是「整块模块失去覆盖」，不是「少写一行测试」。
+3. **覆盖率门槛不许为了让 PR 变绿而下调**：`--cov-fail-under` 的值来自实测（语句覆盖 79.07% / 分支覆盖 76.88%），门槛取 70。它拦住的是「整块模块失去覆盖」，不是「少写一行测试」。
 4. **不让测试变绿的手段是补齐测试**，不是加 `@pytest.mark.skip`、不是 `# type: ignore` 糊 mypy、不是删用例。
 
 ### 关于 15 条 xfail

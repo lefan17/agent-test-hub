@@ -31,8 +31,8 @@ env:
   # 全局统一，避免各 job 各写一份导致口径漂移
   PYTHON_VERSION: "3.12"
   # 覆盖率门槛（实测见 pyproject.toml [tool.coverage.report] 上方注释）：
-  #   仓库默认配置（分支覆盖）75.87% / 关掉分支的语句覆盖对照 78.29% → 门槛取 70，
-  #   留约 5.9 个百分点的余量。取整不取小数，是为了让门槛是「好记好解释的整数」。
+  #   仓库默认配置（分支覆盖）76.88% / 关掉分支的语句覆盖对照 79.07% → 门槛取 70，
+  #   留约 6.9 个百分点的余量。取整不取小数，是为了让门槛是「好记好解释的整数」。
   COV_FAIL_UNDER: "70"
 
 jobs:
@@ -43,7 +43,8 @@ jobs:
     name: 测试套件 + 覆盖率门槛
     runs-on: ubuntu-latest
     # 没有超时的工作流 = 卡死的 runner 会一直占着配额直到 GitHub 的 6 小时上限。
-    # 本仓库全套测试实测约 16 秒，给 15 分钟是 50 倍余量，够慢 runner 喘气。
+    # 本仓库全套测试本机实测约 21 秒（CI 上两步合计 12.8s + 8.0s 也约 21 秒），
+    # 给 15 分钟是 40 倍以上的余量，够慢 runner 喘气。
     timeout-minutes: 15
 
     steps:
@@ -65,7 +66,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       # 为什么必须写 `-o addopts=`：pyproject.toml 里 `addopts = "-q"`，
-      # 而 pytest 的 `-q` 会连同末尾的 summary 行（"135 passed, ..."）一起吞掉。
+      # 而 pytest 的 `-q` 会连同末尾的 summary 行（"161 passed, ..."）一起吞掉。
       # 命令行上的 `-o addopts=` 把配置里的值覆盖为空，计数才会出现在 CI 日志里。
       #
       # 非 UI 用例：被测系统是本地 Flask Demo，RAG 检索默认后端是纯标准库 BM25，
@@ -77,7 +78,7 @@ jobs:
       # 于是 tests/conftest.py 的 `from demo_app.app import create_app` 直接
       # ModuleNotFoundError，整个套件一条都跑不起来（exit code 4）。
       # `python -m pytest` 会把当前目录加进 sys.path[0]，与 README 里记载的本地命令一致。
-      - name: 运行测试套件 + 覆盖率门槛（135 passed, 15 xfailed, 0 failed）
+      - name: 运行测试套件 + 覆盖率门槛（161 passed, 15 xfailed, 0 failed）
         run: |
           python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
             --cov=agenttest --cov=demo_app \
@@ -96,20 +97,23 @@ jobs:
           retention-days: 14
 
       # UI 用例依赖真实 Chrome（tests/test_ui_tool.py 的 4 条）：
-      # GitHub 的 ubuntu runner 预装 google-chrome，selenium 4.6+ 会由
-      # Selenium Manager 自动匹配并下载 chromedriver，所以这一步大概率能过。
+      # 本仓的 Chrome 探测只认 Windows 安装路径（agenttest/config.py 的
+      # DEFAULT_CHROME_CANDIDATES），Linux runner 上必然探测不到，
+      # 因此这 4 条在 CI 里是 skipped 而不是 failed（实测 run 38936350756）。
       # 但「能跑就跑」：浏览器与驱动版本漂移属于外部因素，与仓库代码无关，
       # 因此设 continue-on-error: true —— UI 失败只标黄、不判红，不阻断整个流水线。
       #
       # 这不等于可以不管：日志里能看到这条命令的真实计数与报错。
-      # 但若环境禁止创建子进程（例如受限沙箱），这 4 条会失败且与代码无关；
-      # CI runner 上 Chrome 可用，这一步的期望结果是 139 passed, 15 xfailed, 0 failed。
+      # 但若环境能探测到 Chrome 却禁止它创建子进程（例如受限沙箱），
+      # 这 4 条会以 failed 收场，且与仓库代码无关。
+      # 实测：CI runner 上探测不到 Chrome → 161 passed, 4 skipped, 15 xfailed；
+      # 本机（Chrome 可用、可起子进程）→ 165 passed, 15 xfailed。
       # 这里跑全量套件（而非只跑 UI 文件），是为了让 CI 的这条命令与
       # README 的 `.venv/Scripts/python.exe -m pytest -q` 一一对应。
       #
       # 注意：这一步不加 --cov-fail-under。它跑的是全量套件，与上面那条
       # 「非 UI + 覆盖率门槛」的门禁是两件事，门槛只在上面那条命令上生效。
-      - name: 运行全量套件含 UI（139 passed, 15 xfailed, 0 failed）
+      - name: 运行全量套件含 UI（161 passed, 4 skipped, 15 xfailed：CI runner 探测不到 Chrome）
         continue-on-error: true
         run: python -m pytest -o addopts= -q
 

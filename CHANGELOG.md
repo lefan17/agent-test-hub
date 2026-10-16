@@ -307,6 +307,36 @@ ci(deps): bump the actions group across 1 directory with 6 updates              
 - **未同步**：`CONTRIBUTING.md`、`.github/PULL_REQUEST_TEMPLATE.md`、`.github/workflows/test.yml`
   里仍有 `135 passed` / `139 passed` / `75.87%` 等旧数字，本轮改动边界不含这三个文件。
 
+### 变更（补齐边界外文件：161 / 165 passed，覆盖率 76.88%）
+
+> 上节末尾列出的「未同步」项（`CONTRIBUTING.md`、`.github/PULL_REQUEST_TEMPLATE.md`、
+> `.github/workflows/test.yml`），以及同样写着旧数字的 `pyproject.toml` 注释与
+> `requirements-dev.txt` 注释，本轮一次补齐为同一份实测值。上节保留原样作为历史记录。
+
+- **测试数字**（本机 `.venv`，Python 3.12.10；`-o addopts=` 必加，否则 `-q` 吞掉计数行）：
+  `180 collected`；不含 UI `161 passed, 15 xfailed, 0 failed`；
+  含 UI（本机 Chrome 可用）`165 passed, 15 xfailed`，4 条 UI 用例全计在内。
+- **覆盖率**：默认分支口径 `TOTAL 1500 stmts / 311 miss / 420 branch = 76.88%`
+  （`--ignore=tests/test_ui_tool.py --cov=agenttest --cov=demo_app`，连跑 3 次一致）；
+  关掉分支的语句口径 `TOTAL 1505 stmts / 315 miss = 79.07%`。
+  门槛仍取 70，余量约 6.9 个百分点；分支比纯语句口径低约 2.2 个百分点。
+- **反推表按新分母重算**：分母 = 1500 语句 + 420 分支 = 1920，分子 = 1189 已覆盖行
+  + 287 已覆盖分支 = 1476；某模块整体失守 = `(1476 − 该模块已覆盖的行与分支) / 1920`。
+  得 `agenttest/graph/nodes.py`（254 行）60.5%、`demo_app/rag.py`（264 行）62.6%、
+  `demo_app/app.py`（180 行）66.7%，三个都拦得住；`agenttest/brain/llm_brain.py`（110 行）
+  70.7% 仍拦不住。**这是算术推算，不是逐模块删掉覆盖后重跑的实测。**
+- **CI runner 的真实计数与本地不同**（run 38936350756）：非 UI step 为
+  `161 passed, 15 xfailed`（与本地一致）；全量 step 为 `161 passed, 4 skipped, 15 xfailed`
+  ——本仓的 Chrome 探测只认 Windows 安装路径，Linux runner 上探测不到，那 4 条 UI 用例
+  是 **skipped** 而不是 failed；该 run 的覆盖率为
+  `TOTAL 1500 stmts / 316 miss / 420 branch = 76.67%`（抖动来自 `FLAKY-001`）。
+- **同步位置**：`CONTRIBUTING.md`（第 2 节期望值、`-o addopts=` 说明、第 7 节门槛来源）、
+  `.github/PULL_REQUEST_TEMPLATE.md`（样例输出 + 检查清单）、
+  `.github/workflows/test.yml`（门槛注释、summary 说明、两处 step 名、UI 步骤的期望结果、
+  耗时余量注释）、`pyproject.toml`（两处 coverage 注释块）、
+  `requirements-dev.txt`（口径差异说明）。**有效配置一律未动**：`COV_FAIL_UNDER`、
+  `fail_under`、`branch = true`、命令与触发条件保持原样。
+
 ---
 
 ## 2026-10-13
