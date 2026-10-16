@@ -1,15 +1,18 @@
 """RAG 检索工具：把被测系统的检索链路包装成 Agent 可调用的确定性工具。
 
 与 api_tool 同风格：返回结构化 dict，`ok` 只表示「HTTP 调用本身成功」，
-业务断言（该命中哪些文档、排序是否单调、指标是否达标）交给用例与断言层，
-工具自己不下结论。
+业务断言（该命中哪些文档、排序是否单调）交给用例与断言层，工具自己不下结论。
+
+唯一例外是 `rag_evaluate` 的阈值判定：它只在调用方显式传入 `min_recall` / `min_mrr`
+时才给出结论，且结论写在独立的 `quality` / `quality_ok` 键里——`ok` 的语义不变，
+既有调用方读到的行为不变。
 """
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
 from agenttest.tools.api_tool import api_request
-from agenttest.tools.rag_metrics import build_report, doc_ids_of
+from agenttest.tools.rag_metrics import build_report, doc_ids_of, judge_quality
 
 # 索引一致性探针使用的临时文档（纯 ASCII，避免受中文分词缺陷影响而掩盖陈旧索引缺陷）
 RAG_PROBE_DOC_ID = "DOC-PROBE-TMP"
@@ -84,10 +87,16 @@ def doc_ids_in_index(index_detail: Dict[str, Any]) -> List[str]:
 
 
 def rag_evaluate(base_url: str, queries: Sequence[Dict[str, Any]], top_k: int = 5,
-                 timeout: float = 10.0) -> Dict[str, Any]:
+                 timeout: float = 10.0, min_recall: Optional[float] = None,
+                 min_mrr: Optional[float] = None) -> Dict[str, Any]:
     """跑一组 (query, 标注相关文档) 并计算 recall@k / MRR。
 
-    指标本身由 rag_metrics 的纯函数计算，这里只负责取数，方便用例直接断言数值。
+    指标本身由 rag_metrics 的纯函数计算，这里只负责取数。
+
+    注意 `ok` 的语义：它**只**表示每次检索的 HTTP 调用都成功，一次召回为 0 的检索
+    同样 `ok=True`。要判「检索质量是否达标」，传 `min_recall` / `min_mrr`，结论在
+    返回体的 `quality`（含逐项 `verdicts` 与未达标原因 `failures`）与 `quality_ok` 里；
+    不看阈值时这两个键不出现，既有调用方的行为不变。
     """
     results: List[Dict[str, Any]] = []
     statuses: List[int] = []
@@ -105,6 +114,9 @@ def rag_evaluate(base_url: str, queries: Sequence[Dict[str, Any]], top_k: int = 
         "statuses": statuses,
         "error": "" if ok else f"检索请求状态异常: {statuses}",
     })
+    if min_recall is not None or min_mrr is not None:
+        report["quality"] = judge_quality(report, min_recall=min_recall, min_mrr=min_mrr)
+        report["quality_ok"] = report["quality"]["ok"]
     return report
 
 

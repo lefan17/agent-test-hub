@@ -12,12 +12,14 @@
   分数并列时按 doc_id 升序（check_tie_by_doc_id）
   同一 doc_id 不得重复出现（find_duplicate_hits）
 
-LABELED_QUERIES 是仓库唯一一份标注集（7 条查询，k=5）：
+LABELED_QUERIES 是一份小标注集（7 条查询，k=5）：
   缺陷实现 recall@5=MRR=0.5714（4/7），正确实现两项均为 1.0000。
+RAG_EVAL_SET 是用于**阈值判定**的 20 条评测集（见该常量上方说明）。
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+import math
+from typing import Any, Dict, List, Optional, Sequence
 
 # 浮点比较容差：端点返回的 score 已 round 到 6 位小数
 EPS = 1e-12
@@ -33,6 +35,40 @@ LABELED_QUERIES: List[Dict[str, Any]] = [
     {"q": "向量数据库", "relevant": ["DOC-CN-002"]},
     {"q": "中文分词质量", "relevant": ["DOC-CN-004"]},
     {"q": "索引重建", "relevant": ["DOC-CN-005"]},
+]
+
+
+# 端到端评测集：用于判定「检索质量是否达标」，而不是只把数字算出来。
+#
+# 与 LABELED_QUERIES 的分工：那份 7 条标注集服务于「文档/测试/报告共用同一份数字」，
+# 每条查询都只有一个唯一正确文档、且缺陷实现恰好 4/7；这一份 20 条则要拉开区分度——
+# 正确实现 recall@5 = 1.0000、MRR = 1.0000；默认缺陷实现 recall@5 = 0.7000、
+# MRR ≈ 0.5917（6 条中文查询召回为 0，中文分词缺陷）。于是 `recall@5 >= 0.8`
+# 这类阈值在两边的判定结果相反，阈值本身才是有信息量的。
+#
+# 刻意覆盖多种形状：单文档标注、双文档标注（并列文档）、中文与英文查询、
+# 以及只命中语料里某一篇的多条同义查询——召回缺口不会被个别查询的波动掩盖。
+RAG_EVAL_SET: List[Dict[str, Any]] = [
+    {"q": "vector database similarity", "relevant": ["DOC-EN-001"]},
+    {"q": "semantic search", "relevant": ["DOC-EN-001"]},
+    {"q": "semantic similarity search", "relevant": ["DOC-EN-001"]},
+    {"q": "bm25 ranking algorithm", "relevant": ["DOC-EN-002"]},
+    {"q": "inverse document frequency", "relevant": ["DOC-EN-002"]},
+    {"q": "term frequency algorithm", "relevant": ["DOC-EN-002"]},
+    {"q": "index rebuild inconsistency", "relevant": ["DOC-EN-003"]},
+    {"q": "data and index", "relevant": ["DOC-EN-003"]},
+    {"q": "search quality metrics", "relevant": ["DOC-EN-004"]},
+    {"q": "mean reciprocal rank", "relevant": ["DOC-EN-004"]},
+    {"q": "recall and rank", "relevant": ["DOC-EN-004"]},
+    {"q": "quality metrics recall", "relevant": ["DOC-EN-004"]},
+    {"q": "duplicate text", "relevant": ["DOC-TIE-001", "DOC-TIE-002"]},
+    {"q": "tie break verification", "relevant": ["DOC-TIE-001", "DOC-TIE-002"]},
+    {"q": "向量数据库", "relevant": ["DOC-CN-002"]},
+    {"q": "相似度计算", "relevant": ["DOC-CN-002"]},
+    {"q": "中文分词质量", "relevant": ["DOC-CN-004"]},
+    {"q": "检索召回率", "relevant": ["DOC-CN-004"]},
+    {"q": "索引重建", "relevant": ["DOC-CN-005"]},
+    {"q": "接口层与测试层", "relevant": ["DOC-CN-001"]},
 ]
 
 
@@ -146,3 +182,71 @@ def find_duplicate_hits(hits: Sequence[Dict[str, Any]]) -> List[str]:
     for doc_id in doc_ids_of(hits):
         seen[doc_id] = seen.get(doc_id, 0) + 1
     return [doc_id for doc_id, count in seen.items() if count > 1]
+
+
+def _as_finite_float(value: Any) -> Optional[float]:
+    """把值转成可用于大小比较的有限浮点数。
+
+    不是实数的一律返回 None：缺键（None）、布尔、字符串、非数字、NaN、inf。
+    「指标没算出来」与「指标算出来是 0」必须能在这一步被区分开。
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def judge_quality(report: Dict[str, Any], *,
+                  min_recall: Optional[float] = None,
+                  min_mrr: Optional[float] = None) -> Dict[str, Any]:
+    """对 `build_report` / `rag_evaluate` 的产出做**阈值判定**，返回结论。
+
+    这是「跑通」与「达标」之间的那一层：`rag_evaluate` 的 `ok` 只表示 HTTP 调用成功，
+    一次召回为 0 的检索同样 `ok=True`。本函数只回答「质量是否达到给定阈值」。
+
+    三条判失败规则（缺一不可，都是曾经把假绿放进报告的口子）：
+      1. 没有给出任何阈值：判定无定义，按失败处理——不能因为「没设阈值」就默认达标；
+      2. 评测集没有标注（`labeled_count == 0`）：recall / MRR 全无定义。空标注集配上
+         阈值 0.0 曾让三条断言全部通过，这里必须判失败；
+      3. 被测量的指标不存在或不是有限实数（缺键、None、NaN）：无从比较，判失败。
+         不能让「指标没算出来」和「指标算出来是 0」在任何一环被混为一谈。
+
+    `ok` 由本函数自己的比较结果决定，**不靠抛异常**表达失败：调用方读 `ok` 与
+    `failures` 即可，异常只留给真正的编程错误。
+    """
+    verdicts: List[Dict[str, Any]] = []
+    failures: List[str] = []
+
+    requested = [("recall_at_k", min_recall), ("mrr", min_mrr)]
+    requested = [(metric, threshold) for metric, threshold in requested if threshold is not None]
+
+    if not requested:
+        return {"ok": False, "verdicts": [], "checked": 0,
+                "failures": ["没有给出任何阈值（min_recall / min_mrr 全为 None）："
+                             "阈值判定无定义，按失败处理"]}
+
+    labeled_count = report.get("labeled_count")
+    if not isinstance(labeled_count, int) or labeled_count <= 0:
+        return {"ok": False, "verdicts": [], "checked": 0,
+                "failures": [f"评测集没有可用标注（labeled_count={labeled_count!r}）："
+                             "recall@k 与 MRR 都无定义——标注缺失按失败处理，"
+                             "不按「无可漏项」记满分"]}
+
+    for metric, threshold in requested:
+        limit = _as_finite_float(threshold)
+        if limit is None:
+            failures.append(f"阈值 {metric} >= {threshold!r} 不是有限实数，判定无定义")
+            continue
+        measured = _as_finite_float(report.get(metric))
+        if measured is None:
+            failures.append(f"被测量 {metric} 不存在或不是有限实数（实际 {report.get(metric)!r}）："
+                            f"无从与阈值 {limit} 比较，按失败处理")
+            continue
+        passed = measured + EPS >= limit
+        verdicts.append({"metric": metric, "threshold": limit, "value": measured, "ok": passed})
+        if not passed:
+            failures.append(f"{metric}={measured:.4f} < 阈值 {limit:.4f}"
+                            f"（标注 {labeled_count} 条查询，未达标）")
+
+    return {"ok": bool(verdicts) and not failures, "verdicts": verdicts,
+            "checked": len(verdicts), "failures": failures}
