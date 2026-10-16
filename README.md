@@ -34,7 +34,7 @@
 - **契约驱动**：从被测系统 `/openapi.json` 读取 OpenAPI 规范并摘要后交给 Brain 生成测试用例；`LLMBrain` 路径按契约生成，`MockBrain` 路径是固定的 28 条模板（不读 spec，保证离线确定性）
 - **API + UI + RAG 三覆盖**：接口断言 + 真实浏览器（Chrome 无头）渲染断言与截图 + 检索链路质量断言（recall@k / MRR / 排序 / 去重 / 索引一致性）
 - **检索质量可量化**：RAG 用例产出 recall@k 与 MRR 具体数值写入报告证据，可被 pytest 断言
-- **智能缺陷归因**：失败用例由 Brain（LLM 或规则引擎）自动归类为 bug / contract / flaky / environment / test_issue / relevance 六类；规则引擎实际产出 bug / contract / flaky / test_issue / relevance 五类，`environment` 保留给 LLM 归因
+- **智能缺陷归因**：失败用例由 Brain（LLM 或规则引擎）自动归类为 bug / contract / flaky / environment / test_issue / relevance 六类。规则引擎覆盖全部六类：四类由 HTTP 语义映射（400→500 契约不符 / 400→200 校验缺失 / 503 flaky / 没拿到任何响应→environment），`test_issue` 与 `relevance` 分别兜 API 与 RAG 的其余失败
 - **自动重试**：对 5xx / 网络异常自动重试（指数退避），区分「不稳定」与「真缺陷」
 - **双 Brain 可切换**：`MockBrain`（规则引擎，离线可跑、演示确定性）+ `LLMBrain`（LangChain 结构化输出，接 DeepSeek/OpenAI/通义等）
 - **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、缺陷证据与截图（截图仅在 UI 用例真正跑通时产生）、以及「本轮是否降级为规则引擎」的显式声明
