@@ -270,6 +270,43 @@ ci(deps): bump the actions group across 1 directory with 6 updates              
   因此行文不再把 `4 failed` 当成当前实测；能启动 Chrome 子进程时它们全部通过
   （`139 passed`），只有禁止创建子进程的环境里才以 failed 收场。
 
+### 修复（第三轮：RAG 覆盖键、缺陷关联用例、评测集端到端判阈值）
+
+三个问题都不是「代码写错了」，而是**报告与判据说了不真实的话**，故各自补了能证伪的测试。
+
+- **coverage 键硬编码**（`agenttest/graph/nodes.py`）：RAG 分支原先一律返回
+  `RAG GET /api/rag/search`，于是 10 条 RAG 用例（含依次打了 5 个端点的索引一致性探针）
+  在报告里塌成同一个键，而 `/api/rag/index`、`/api/rag/reindex`、`/api/rag/docs`
+  这三个真实被调用的端点显示为「无人覆盖」。现改为 `_coverage_keys()` 返回列表：
+  检索与契约用例 1 个键，一致性探针 5 个键；键统一为 `method + path`。
+  全量 28 条用例的键数 13 → 17（`--no-ui` 时 10 → 14）。
+  局限已知并写进代码注释：coverage 是**声明**（用例将打哪些端点），不是执行期实测；
+  `tests/test_rag_coverage.py` 用 `rag_tool` 的真实调用记录核对声明表，
+  谁给 `rag_tool` 加了端点却没同步声明，测试就变红。
+- **缺陷关联用例挂全部失败用例**（`agenttest/brain/llm_brain.py`）：
+  `related_case_ids=[r.case_id for r in failed]` 让每个缺陷都挂上本次**所有**失败用例，
+  HTML 报告里「关联用例」一栏因此恒等于失败清单，等于没关联。现改为：
+  LLM 在 `_DefectDraft.case_ids` 里自报，本地用失败用例 id 做白名单过滤（滤掉幻觉 id），
+  过滤后为空时收窄到「与缺陷 endpoint 同 kind 的失败用例」——不再退回全部失败用例。
+  MockBrain 一侧本来就一缺陷一用例，行为未变（有对照组测试钉住）。
+- **RAG 评测集只跑通不判定**（`agenttest/tools/rag_metrics.py` / `rag_tool.py`）：
+  `rag_evaluate` 的 `ok` 只表示 HTTP 调用成功，对检索质量没有任何阈值结论，
+  读报告的人无法从返回体看出「recall@5 是否达标」。现新增 `RAG_EVAL_SET`（20 条查询）
+  与 `judge_quality()`，`rag_evaluate(..., min_recall=0.8, min_mrr=0.8)` 把结论写进
+  `quality` / `quality_ok`。判定一律写成返回值，**不靠抛异常**；三类情况判失败而非放行：
+  没给任何阈值、评测集没有可用标注（`labeled_count == 0`）、被测量缺失或不是有限实数。
+  实测：缺陷实现 recall@5 = 0.7000 判失败，正确实现 1.0000 判通过。
+  不传阈值时 `rag_evaluate` 返回体逐键不变（有回归测试钉住）。
+- **数字口径再对齐**：`README.md`、`docs/操作指南.md`、`docs/面试QA.md`、`docs/简历描述.md`
+  的测试数与覆盖率同步为本机实测现值。采集数 `154 → 180`（不含 UI 由 `135 passed + 15 xfailed`
+  变为 `161 passed + 15 xfailed`；含 UI 由 `139` 变为 `165`）；覆盖率分支口径
+  `TOTAL 1500 stmts / 311 miss / 420 branch = 76.88%`（`--ignore=tests/test_ui_tool.py`；
+  同一命令连跑 5 次为 4 次 76.88% + 1 次 76.98%），关掉分支的语句口径
+  `TOTAL 1505 stmts / 315 miss = 79.07%`。
+  门槛仍取 70，余量约 6.9 个百分点。
+- **未同步**：`CONTRIBUTING.md`、`.github/PULL_REQUEST_TEMPLATE.md`、`.github/workflows/test.yml`
+  里仍有 `135 passed` / `139 passed` / `75.87%` 等旧数字，本轮改动边界不含这三个文件。
+
 ---
 
 ## 2026-10-13

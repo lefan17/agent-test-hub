@@ -59,13 +59,13 @@ OpenAI 兼容接口抽象（base_url + model + api_key），DeepSeek/OpenAI/通�
 零驱动、零下载、离线可用、对 CI 友好；Selenium 作为可选后端保留，体现对不同场景的取舍判断。
 
 **Q19：项目怎么验证自己是对的？**
-154 项 pytest：被测系统功能测试（含 15 项缺陷基准 xfail：API 与 RAG 检索缺陷面）、MockBrain 规划/归因单测、工具集成测试（api_request / rag_search / rag_evaluate）、BM25 后端与检索指标纯函数单测、executor 断言求值层单测（API 双断言 / rag_status / 未实现断言必须失败（RAG、API、UI 三条求值路径）/ 指数退避 / 并发锁）、报告渲染测试、端到端测试（断言必须发现 contract+bug 两类缺陷）。本机实测 135 passed + 15 xfailed（不含 UI）；另有 4 条 UI 用例需要**能真正启动**的 Chrome，单独跑 `tests/test_ui_tool.py` 即可覆盖。
+180 项 pytest：被测系统功能测试（含 15 项缺陷基准 xfail：API 与 RAG 检索缺陷面）、MockBrain 规划/归因单测、LLM 降级与缺陷关联用例白名单单测、工具集成测试（api_request / rag_search / rag_evaluate）、BM25 后端与检索指标纯函数单测、评测集端到端阈值判定（空标注 / 被测量缺失 / 召回为 0 都判失败）、coverage 端点映射声明与 `rag_tool` 真实调用的一致性、executor 断言求值层单测（API 双断言 / rag_status / 未实现断言必须失败（RAG、API、UI 三条求值路径）/ 指数退避 / 并发锁）、报告渲染测试、端到端测试（断言必须发现 contract+bug 两类缺陷）。本机实测 161 passed + 15 xfailed（不含 UI）；另有 4 条 UI 用例需要**能真正启动**的 Chrome，单独跑 `tests/test_ui_tool.py` 即可覆盖。
 
 **Q20：RAG 检索链路怎么测？**
 三层断言，而不是只看 HTTP 200：
 ① **契约层**：状态码（空 q / 非法 top_k 必须 400）、响应结构、`index` 元信息；
 ② **不变量层**：rank 必须 1..n 连续、score 单调非增、并列分数按 doc_id 升序（可复现性）、同一 doc_id 不得重复、已删除文档不得再被召回（ghost hit）；
-③ **质量层**：用标注集算 recall@k 与 MRR，把「检索变差」变成数字。实测：注入缺陷实现 recall@5=0.5714 / MRR=0.5714，修正实现两项都是 1.0000，差距全部来自中文查询召回为 0。
+③ **质量层**：用标注集算 recall@k 与 MRR，把「检索变差」变成数字。`LABELED_QUERIES`（7 条，钉住文档数字）：注入缺陷实现 recall@5=0.5714 / MRR=0.5714，修正实现两项都是 1.0000，差距全部来自中文查询召回为 0。另有 `RAG_EVAL_SET`（20 条）用于**阈值判定**：`rag_evaluate(min_recall=0.8)` 的结论写在 `quality` / `quality_ok` 里，缺陷实现 0.7000 判失败、正确实现 1.0000 判通过；空标注（`labeled_count == 0`）与被测量缺失都判失败——「指标无定义」不等于「指标达标」。
 
 **Q21：为什么 BM25 自己写，不用 rank_bm25 / jieba？**
 硬约束是零新增依赖 + 离线确定性可回归：BM25 的公式本身不长（idf + 词频饱和 + 文档长度归一），纯标准库几十行就能实现，还省掉第三方库版本与分词器行为带来的不确定性。中文分词用「字符 unigram + 相邻 bigram」的简化方案，不需要词典，也不用 jieba，并且恰好能把「分词缺失导致召回归零」这个真实缺陷暴露出来。
