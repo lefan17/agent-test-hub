@@ -31,11 +31,18 @@ def _retryable(status: int) -> bool:
 def make_planner(brain: BaseBrain, cfg: Config):
     def planner(state: Dict[str, Any]) -> Dict[str, Any]:
         cases = brain.make_plan(state["goal"], state["spec"], state["context"])
+        reason = getattr(brain, "last_fallback_reason", "")
+        if reason:
+            state["context"]["brain_fallback_reason"] = reason
         if state["context"].get("skip_ui"):
             kept = [c for c in cases if c.kind != "ui"]
             trace = [f"[planner] {brain.name} 生成 {len(cases)} 条测试用例（--no-ui 过滤后 {len(kept)} 条）"]
+            if reason:
+                trace.insert(0, f"[planner] LLM 规划失败，已降级规则引擎：{reason}")
             return {"cases": kept, "trace": trace}
         trace = [f"[planner] {brain.name} 生成 {len(cases)} 条测试用例"]
+        if reason:
+            trace.insert(0, f"[planner] LLM 规划失败，已降级规则引擎：{reason}")
         return {"cases": cases, "trace": trace}
     return planner
 
@@ -347,11 +354,16 @@ def make_critic(brain: BaseBrain):
     def critic(state: Dict[str, Any]) -> Dict[str, Any]:
         results = state["results"]
         defects = brain.analyze_failures(results, state["context"])
+        reason = getattr(brain, "last_fallback_reason", "")
+        if reason:
+            state["context"]["brain_fallback_reason"] = reason
         coverage: Dict[str, List[str]] = {}
         for case in state["cases"]:
             coverage.setdefault(_coverage_key(case), []).append(case.id)
         trace = [f"[critic] 失败 {sum(1 for r in results if not r.ok)}/{len(results)}，"
                  f"归因出 {len(defects)} 个缺陷"]
+        if reason:
+            trace.append(f"[critic] LLM 归因失败，已降级规则引擎：{reason}")
         for d in defects:
             trace.append(f"[critic]   {d.id} [{d.severity}/{d.category}] {d.title} @ {d.endpoint}")
         return {"defects": defects, "coverage": coverage, "trace": trace}
@@ -368,6 +380,7 @@ def make_reporter(brain: BaseBrain, cfg: Config):
             finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
             brain_name=brain.name,
             llm_configured=cfg.llm_configured,
+            brain_fallback_reason=state["context"].get("brain_fallback_reason", ""),
             base_url=state["context"]["base_url"],
             cases=state["results"],
             defects=state["defects"],

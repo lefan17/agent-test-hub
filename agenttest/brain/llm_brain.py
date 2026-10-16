@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
@@ -14,6 +15,8 @@ from pydantic import BaseModel, Field
 from agenttest.config import Config
 from agenttest.models import Defect, TestCase, TestResult
 from agenttest.tools.spec_tool import summarize_spec
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PLAN_PROMPT = """你是一名资深测试工程师兼 Agent 架构师，负责为一个被测系统设计自动化测试计划。
 被测系统契约如下（OpenAPI 摘要）：
@@ -69,6 +72,9 @@ class LLMBrain:
         self.api_key = cfg.llm_api_key
         self.base_url = cfg.llm_base_url or None
         self.model = cfg.llm_model
+        # 最近一次降级到 MockBrain 的原因；空串表示这一轮真的走了 LLM。
+        # 报告层靠它避免把"降级后的规则引擎输出"标成"真实 LLM"。
+        self.last_fallback_reason = ""
 
     def _chat(self):
         from langchain_openai import ChatOpenAI
@@ -84,19 +90,42 @@ class LLMBrain:
     def make_plan(self, goal: str, spec: Dict[str, Any], context: Dict[str, Any]) -> List[TestCase]:
         prompt = SYSTEM_PLAN_PROMPT.format(spec=summarize_spec(spec))
         user = f"目标：{goal}\n被测系统地址：{context.get('base_url')}\n请生成测试计划。"
-        llm = self._chat().with_structured_output(_PlanResult)
-        out = llm.invoke([{"role": "system", "content": prompt}, {"role": "user", "content": user}])
+        try:
+            llm = self._chat().with_structured_output(_PlanResult)
+            out = llm.invoke([{"role": "system", "content": prompt}, {"role": "user", "content": user}])
+        except Exception as exc:
+            return self._fallback_plan(context, f"LLM 调用失败（{type(exc).__name__}: {exc}）")
         cases = []
         for i, c in enumerate(out.cases or [], start=1):
             c.id = (c.id or f"LLM-{i:03d}").strip()
             cases.append(c)
-        return cases or self._fallback_plan(context)
+        if not cases:
+            return self._fallback_plan(context, "LLM 返回了空的用例列表")
+        return cases
 
-    def _fallback_plan(self, context: Dict[str, Any]) -> List[TestCase]:
-        """LLM 输出为空时兜底，保证流程不中断。"""
+    def _fallback_plan(self, context: Dict[str, Any], reason: str) -> List[TestCase]:
+        """LLM 调用失败或输出为空时兜底，保证流程不中断。
+
+        兜底本身是设计的一部分，但"降级"必须显式可见——静默降级会让报告里的
+        `brain_name=llm` 变成谎言。所以这里把 reason 写进日志，并由调用方
+        （planner 节点）把它带进 trace 与报告。
+        """
         from agenttest.brain.mock_brain import MockBrain
 
+        logger.warning("[llm_brain] 降级为 MockBrain：%s", reason)
+        self.last_fallback_reason = reason
         return MockBrain().make_plan("fallback", {}, context)
+
+    def _fallback_defects(self, results: List[TestResult], context: Dict[str, Any], reason: str) -> List[Defect]:
+        """LLM 归因失败时兜底，保证流水线仍能出报告。
+
+        与 _fallback_plan 同理：降级必须可见，否则报告会声称归因来自 LLM。
+        """
+        from agenttest.brain.mock_brain import MockBrain
+
+        logger.warning("[llm_brain] 归因降级为 MockBrain：%s", reason)
+        self.last_fallback_reason = reason
+        return MockBrain().analyze_failures(results, context)
 
     def analyze_failures(self, results: List[TestResult], context: Dict[str, Any]) -> List[Defect]:
         failed = [r for r in results if not r.ok]
@@ -108,8 +137,11 @@ class LLMBrain:
             for r in failed
         ]
         prompt = SYSTEM_ANALYSIS_PROMPT.format(results=json.dumps(payload, ensure_ascii=False, indent=2))
-        llm = self._chat().with_structured_output(_AnalysisResult)
-        out = llm.invoke([{"role": "system", "content": prompt}])
+        try:
+            llm = self._chat().with_structured_output(_AnalysisResult)
+            out = llm.invoke([{"role": "system", "content": prompt}])
+        except Exception as exc:
+            return self._fallback_defects(results, context, f"LLM 归因调用失败（{type(exc).__name__}: {exc}）")
         defects = []
         for i, d in enumerate(out.defects or [], start=1):
             defects.append(Defect(

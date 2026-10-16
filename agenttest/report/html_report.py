@@ -46,6 +46,7 @@ TEMPLATE = """<!doctype html>
   .trace .t-pass { color:#4ade80; } .trace .t-fail { color:#f87171; }
   img.shot { max-width: 420px; border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; }
   .muted { color: var(--muted); font-size: 12px; }
+  .fallback-warning { background:#78350f; color:#fde68a; border:1px solid #b45309; border-radius:8px; padding:10px 14px; margin:0 0 16px; font-size:13px; line-height:1.7; }
 </style>
 </head>
 <body>
@@ -53,10 +54,16 @@ TEMPLATE = """<!doctype html>
   <h1>🤖 Agent 自动测试报告</h1>
   <div class="meta">
     目标：{{ report.goal }}<br>
-    Brain：{{ report.brain_name }}{% if report.llm_configured %}（真实 LLM）{% else %}（规则引擎 Mock，未配置 API Key）{% endif %}
+    Brain：{{ report.brain_name }}{% if report.brain_fallback_reason %}（真实 LLM 调用失败，本轮已降级为规则引擎 Mock）{% elif report.llm_configured %}（真实 LLM）{% else %}（规则引擎 Mock，未配置 API Key）{% endif %}
     ｜ 被测系统：{{ report.base_url }}
     ｜ 开始 {{ report.started_at }} ～ 结束 {{ report.finished_at }}
   </div>
+  {% if report.brain_fallback_reason %}
+  <div class="fallback-warning">
+    ⚠️ 本轮配置了 LLM，但调用失败，规划与归因已降级为规则引擎（MockBrain）。
+    报告中的用例与缺陷来自规则引擎，不代表大模型的输出。原因：{{ report.brain_fallback_reason }}
+  </div>
+  {% endif %}
 </header>
 <main>
   <div class="cards">

@@ -110,6 +110,9 @@ class TestReport(BaseModel):
     finished_at: str = ""
     brain_name: str = "mock"
     llm_configured: bool = False
+    # 非空表示这一轮 LLM 调用失败、已降级为 MockBrain；报告据此避免把规则引擎
+    # 的输出标成"真实 LLM"。
+    brain_fallback_reason: str = ""
     base_url: str = ""
     summary: Dict[str, int] = Field(default_factory=dict)
     cases: List[TestResult] = Field(default_factory=list)
