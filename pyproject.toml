@@ -103,19 +103,20 @@ select = ["E4", "E9", "W6", "F63", "F7", "F82", "PGH", "PIE", "RUF100"]
 # 门槛值 70 的来源是**实测**，不是拍脑袋：
 #   python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
 #     --cov=agenttest --cov=demo_app --cov-report=term-missing
-#   仓库默认配置（下面 branch = true）：TOTAL 1379 stmts / 330 miss / 354 branch = 73.46%
-#   关掉分支覆盖对照：            TOTAL 1381 stmts / 331 miss = 76%
-# 取整到 70：低于两条实测口径（73.46% / 76%）留有约 3.4 个百分点的余量，
+#   仓库默认配置（下面 branch = true）：TOTAL 1410 stmts / 309 miss / 366 branch = 75.28%
+#   关掉分支覆盖对照：            TOTAL 1415 stmts / 313 miss = 78.09%
+# 取整到 70：低于两条实测口径（75.28% / 78.09%）留有约 5.3 个百分点的余量，
 # 但足以拦住「大模块整体失去覆盖」这类退化（实测反推：graph/nodes.py 的
-# 222 行若整体失去覆盖会掉到 69.9%，必然失败；但 demo_app/rag.py 的 264 行
-# 只剩 71.1%，拦不住 —— 见 README「覆盖率」一节的实测反推表）。
-# 另：本机多轮实测在 73.46%~73.56% 之间抖动（rag.py 的 FLAKY-001
-# 有 10% 概率返回 503），门槛取 70 也刻意覆盖了这段抖动幅度。
+# 234 行若整体失去覆盖会掉到 59.5%、demo_app/rag.py 的 264 行会掉到 60.1%，
+# 都必然失败；但 agenttest/brain/llm_brain.py 的 75 行只剩 71.1%，拦不住
+# —— 见 README「覆盖率」一节的实测反推表）。
+# 另：rag.py 的 FLAKY-001 有 10% 概率返回 503，可能带来小幅抖动；
+# 本机最近 3 次连跑均为 75.28%，门槛取 70 覆盖了这段抖动幅度。
 # 覆盖率画像（谁没被覆盖）见 README「覆盖率」一节。
 # ---------------------------------------------------------------------------
 [tool.coverage.run]
 # 分支覆盖比语句覆盖更接近「测试是否真的走过每条路径」，
-# 因此默认开启；代价是数字比纯语句覆盖低约 4 个百分点（见上面的实测）。
+# 因此默认开启；代价是数字比纯语句覆盖低约 2.8 个百分点（见上面的实测）。
 branch = true
 source = ["agenttest", "demo_app"]
 # __main__.py 只是 CLI 薄壳（3 行 argparse 转发），单独跑它没有断言价值
@@ -125,9 +126,9 @@ omit = ["agenttest/__main__.py"]
 # 实测（2026-10 本机 .venv，Python 3.12.10）：
 #   python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
 #     --cov=agenttest --cov=demo_app --cov-report=term-missing
-#   → TOTAL 1379 stmts / 330 miss / 354 branch = 73.46%（branch = true，本配置）
-#   → 对照关掉 branch：1381 stmts / 331 miss = 76%
-# 门槛取 70：比分支口径实测低 3.4 个百分点，给后续重构留出余量，
+#   → TOTAL 1410 stmts / 309 miss / 366 branch = 75.28%（branch = true，本配置）
+#   → 对照关掉 branch：1415 stmts / 313 miss = 78.09%
+# 门槛取 70：比分支口径实测低 5.3 个百分点，给后续重构留出余量，
 # 但仍能拦住「大段代码失去覆盖」这类退化。
 fail_under = 70
 show_missing = true

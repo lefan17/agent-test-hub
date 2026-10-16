@@ -31,8 +31,8 @@ env:
   # 全局统一，避免各 job 各写一份导致口径漂移
   PYTHON_VERSION: "3.12"
   # 覆盖率门槛（实测见 pyproject.toml [tool.coverage.report] 上方注释）：
-  #   仓库默认配置（分支覆盖）73.46% / 关掉分支的语句覆盖对照 76% → 门槛取 70，
-  #   留约 3.4 个百分点的余量。取整不取小数，是为了让门槛是「好记好解释的整数」。
+  #   仓库默认配置（分支覆盖）75.28% / 关掉分支的语句覆盖对照 78.09% → 门槛取 70，
+  #   留约 5.3 个百分点的余量。取整不取小数，是为了让门槛是「好记好解释的整数」。
   COV_FAIL_UNDER: "70"
 
 jobs:
@@ -65,7 +65,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       # 为什么必须写 `-o addopts=`：pyproject.toml 里 `addopts = "-q"`，
-      # 而 pytest 的 `-q` 会连同末尾的 summary 行（"121 passed, ..."）一起吞掉。
+      # 而 pytest 的 `-q` 会连同末尾的 summary 行（"129 passed, ..."）一起吞掉。
       # 命令行上的 `-o addopts=` 把配置里的值覆盖为空，计数才会出现在 CI 日志里。
       #
       # 非 UI 用例：被测系统是本地 Flask Demo，RAG 检索默认后端是纯标准库 BM25，
@@ -77,7 +77,7 @@ jobs:
       # 于是 tests/conftest.py 的 `from demo_app.app import create_app` 直接
       # ModuleNotFoundError，整个套件一条都跑不起来（exit code 4）。
       # `python -m pytest` 会把当前目录加进 sys.path[0]，与 README 里记载的本地命令一致。
-      - name: 运行测试套件 + 覆盖率门槛（121 passed, 15 xfailed, 0 failed）
+      - name: 运行测试套件 + 覆盖率门槛（129 passed, 15 xfailed, 0 failed）
         run: |
           python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
             --cov=agenttest --cov=demo_app \
@@ -102,13 +102,13 @@ jobs:
       # 因此设 continue-on-error: true —— UI 失败只标黄、不判红，不阻断整个流水线。
       #
       # 这不等于可以不管：日志里能看到这条命令的真实计数与报错。
-      # 本地沙箱无 Chrome 时这里就是 README 声明的 4 failed，属环境限制。
+      # 本地沙箱里 Chrome 存在但启不了子进程，这里就是 README 声明的 4 failed，属环境限制。
       # 这里跑全量套件（而非只跑 UI 文件），是为了让 CI 的这条命令与
       # README 的 `.venv/Scripts/python.exe -m pytest -q` 一一对应。
       #
       # 注意：这一步不加 --cov-fail-under。它跑的是全量套件，与上面那条
       # 「非 UI + 覆盖率门槛」的门禁是两件事，门槛只在上面那条命令上生效。
-      - name: 运行全量套件含 UI（121 passed, 15 xfailed, 4 failed：UI 因无 Chrome）
+      - name: 运行全量套件含 UI（129 passed, 15 xfailed, 4 failed：本机 UI 环境不可用）
         continue-on-error: true
         run: python -m pytest -o addopts= -q
 
