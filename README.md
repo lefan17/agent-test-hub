@@ -14,6 +14,14 @@
 >
 > 🤝 **协作规范**：见 [CONTRIBUTING.md](CONTRIBUTING.md) · 变更记录见 [CHANGELOG.md](CHANGELOG.md)
 
+> 🧭 **在作品集中的位置**：这条测试 / 质量线上的**第三段**。前两段是
+> [fullstack-test-framework](https://github.com/lefan17/fullstack-test-framework)——接口 + UI + 业务全链路
+> 自动化测试框架（pytest + FastAPI + Playwright + Allure + CI），负责把执行与断言做扎实；
+> 与 [perf-baseline-quality-gate](https://github.com/lefan17/perf-baseline-quality-gate)——性能与稳定性
+> 基线平台 + 质量度量与 CI 门禁平台（自研压测引擎、P95/P99 与拐点判定、flaky 识别、12 条门禁规则
+> 接入 CI），负责回答"变慢了没有、门禁拦不拦得住"。本仓库接在最后：把**用例生成、执行与缺陷归因
+> 交给 LangGraph 编排的 Agent**——接口自动化 → 性能与质量门禁 → Agent 自动测试。
+
 ## 为什么这个项目能同时投两个岗位
 
 | 视角 | 体现的能力 | 对应简历点 |
