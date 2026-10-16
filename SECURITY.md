@@ -26,5 +26,5 @@
 - CI 的 `security` job 跑 `pip-audit -r requirements.lock`，设了 `continue-on-error: true`
   **非阻塞**：它查的是外部漏洞库快照，同一条提交可能今天绿明天红。报告进 step summary 与
   artifact，由人判断要不要处理。
-- LLM 与 Embedding 凭据只从环境变量读；`.env.example` 只有占位值且被 `.gitignore` 忽略，
-  入库的 `scripts/env/prod.env` 刻意不写 Key，仓库内没有任何真实 key。
+- LLM 与 Embedding 凭据只从环境变量或 `.env` 读（`.env` 已被 `.gitignore` 忽略）。入库的
+  `.env.example` 里 key 行是注释掉的占位，三个入库档案 `scripts/env/*.env` 都不写 Key。
