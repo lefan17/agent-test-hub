@@ -248,6 +248,28 @@ ci(deps): bump the actions group across 1 directory with 6 updates              
 - **`.github/workflows/test.yml`**：两处 step 名与一处注释里的旧数字同步为 `129 passed`；
   「本地沙箱无 Chrome」改为「Chrome 存在但启不了子进程」。
 
+### 变更（数字口径再对齐：测试数 154 / 分支覆盖 75.87%）
+
+> 上一节写的 `148 collected / 129 passed / 分支覆盖 75.28% / 语句覆盖 78.09%` 是**当时**的
+> 实测值；此后又落了几个修 bug 与补测试的提交，测试数与覆盖率都已上移。本节给出现值，
+> 上面那段保留原样作为历史记录。
+
+- **测试数字**：`154 collected`（不含 UI 为 `135 passed + 15 xfailed = 150`；
+  含 UI 且能启动 Chrome 子进程时为 `139 passed, 15 xfailed, 0 failed`）。
+  每文件条数三处上移：`tests/test_checks.py` 16 → 19、`tests/test_mock_brain.py` 5 → 7、
+  `tests/test_rag_engine.py` 38 → 39；README 表里 11 个文件相加等于 154。
+- **覆盖率**：仓库默认口径（分支覆盖）`TOTAL 1423 stmts / 306 miss / 380 branch = 75.87%`；
+  关掉分支对照 `TOTAL 1428 stmts / 310 miss = 78.29%`。门槛仍取 70，余量约 5.9 个百分点。
+  README 的「门槛能拦住什么」反推表按新分母（1423 语句 + 380 分支 = 1803）重算：
+  `graph/nodes.py`（实测 246 行，原写 234 行）整体失守 → 59.1%、`demo_app/rag.py` → 60.9%、
+  `demo_app/app.py` → 65.1%，三个都拦得住；`llm_brain.py`（75 行）整体失守仍剩 71.7%，拦不住。
+- **同步位置**：`README.md`、`CONTRIBUTING.md`、`pyproject.toml`、
+  `.github/workflows/test.yml`、`.github/PULL_REQUEST_TEMPLATE.md`、
+  `docs/操作指南.md`、`docs/面试QA.md`、`docs/简历描述.md`。
+- **UI 用例口径澄清**：4 条 UI 用例的结果取决于运行环境，不再是「本沙箱 4 failed」这一固定值，
+  因此行文不再把 `4 failed` 当成当前实测；能启动 Chrome 子进程时它们全部通过
+  （`139 passed`），只有禁止创建子进程的环境里才以 failed 收场。
+
 ---
 
 ## 2026-10-13
