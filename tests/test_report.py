@@ -30,3 +30,38 @@ def test_html_report_contains_summary_and_defects():
     assert "DEF-001" in html
     assert "API-006" in html
     assert "契约不符" in html
+
+
+def test_html_report_marks_llm_degradation():
+    """LLM 配了但调用失败时，报告不能写成"真实 LLM"。
+
+    没有这条断言，将来谁删掉降级横幅都不会有测试变红，而报告会重新变成
+    "看起来用了大模型、实际是规则引擎"——正是这个项目自己反复强调要避免的假绿。
+    """
+    report = TestReport(
+        goal="演示目标",
+        brain_name="llm",
+        llm_configured=True,
+        brain_fallback_reason="LLM 调用失败（ConnectionError: Connection error.）",
+        base_url="http://127.0.0.1:5001",
+        summary={"total": 1, "passed": 1, "failed": 0, "defects": 0},
+        cases=[TestResult(case_id="API-001", title="健康检查", kind="api", ok=True)],
+    )
+    html = render_html_report(report)
+    assert "降级为规则引擎" in html
+    assert "Connection error." in html
+    assert "（真实 LLM）" not in html
+
+
+def test_html_report_does_not_warn_when_llm_succeeded():
+    report = TestReport(
+        goal="演示目标",
+        brain_name="llm",
+        llm_configured=True,
+        base_url="http://127.0.0.1:5001",
+        summary={"total": 1, "passed": 1, "failed": 0, "defects": 0},
+        cases=[TestResult(case_id="API-001", title="健康检查", kind="api", ok=True)],
+    )
+    html = render_html_report(report)
+    assert "降级为规则引擎" not in html
+    assert "（真实 LLM）" in html
