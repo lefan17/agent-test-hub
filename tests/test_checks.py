@@ -52,6 +52,54 @@ def test_unimplemented_rag_check_type_fails():
     assert "未实现" in verdict["detail"]
 
 
+def test_rag_metric_checks_fail_when_case_has_no_labels():
+    """没有标注时 recall/MRR 无定义，必须判失败——不能按「无可漏项」记满分。
+
+    `Check.threshold` 默认 0.0，所以 `value(0.0) + 1e-12 >= 0.0` 恒真。若这里不
+    显式拦住标注缺失，一条没有 rag_relevant 的用例会带着「recall@5=0.000000 < 阈值
+    0.0」这种自相矛盾的 detail 通过。LLMBrain 生成的用例正好可能漏标注：prompt 只说
+    「related 标注文档用 rag_relevant」，没有强制要求填。
+    """
+    unlabeled = TestCase(id="RAG-NOLABEL", title="t", kind="rag", rag_query="vector database",
+                         top_k=5, rag_relevant=[])
+    hits = [{"doc_id": "DOC-EN-001", "score": 1.0, "rank": 1}]
+    for check_type in ("rag_recall_at_least", "rag_mrr_at_least"):
+        verdict = nodes._eval_rag_check(Check(type=check_type), hits, unlabeled, 200)
+        assert verdict["ok"] is False, f"{check_type} 在无标注时不应通过"
+        assert "标注" in verdict["detail"], verdict["detail"]
+
+
+def test_rag_hits_include_fails_when_nothing_is_declared():
+    """doc_ids 与 target 都为空时没有判定依据，必须判失败。
+
+    旧实现 wanted=[] → missing=[] → `not missing` 恒真，detail 会输出
+    「命中缺少 []（实际 [...]）」这种看着像失败的文案却 ok=True。
+    """
+    verdict = nodes._eval_rag_check(Check(type="rag_hits_include"), [], _rag_case(), 200)
+    assert verdict["ok"] is False
+    assert "无法判定" in verdict["detail"]
+
+
+def test_rag_detail_text_agrees_with_the_verdict():
+    """detail 文案必须与 ok 同向：通过时不能写「缺少」「< 阈值」。"""
+    case = _rag_case()
+    hits = [{"doc_id": "DOC-EN-001", "score": 1.0, "rank": 1}]
+
+    included = nodes._eval_rag_check(
+        Check(type="rag_hits_include", doc_ids=["DOC-EN-001"]), hits, case, 200)
+    assert included["ok"] is True
+    assert "命中包含" in included["detail"] and "缺少" not in included["detail"]
+
+    for check_type in ("rag_recall_at_least", "rag_mrr_at_least"):
+        passed = nodes._eval_rag_check(Check(type=check_type, threshold=1.0), hits, case, 200)
+        assert passed["ok"] is True
+        assert ">=" in passed["detail"] and "< 阈值" not in passed["detail"], passed["detail"]
+
+        failed = nodes._eval_rag_check(Check(type=check_type, threshold=1.0), [], case, 200)
+        assert failed["ok"] is False
+        assert "< 阈值" in failed["detail"], failed["detail"]
+
+
 def test_every_declared_rag_check_type_has_an_implementation():
     """每个已声明的 rag_* 断言都必须有落点：要么在 _eval_rag_check，要么在用例分派层。
 

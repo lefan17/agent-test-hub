@@ -3,7 +3,8 @@
 指标定义（写进报告与文档的口径，务必与实现一致）：
   recall@k = |top-k 召回的 doc_id ∩ 标注相关 doc_id| / |标注相关 doc_id|
              —— 单查询计算；多查询取算术平均（宏平均），无标注的查询不参与宏平均。
-  MRR     = mean(1 / 首个相关文档的 rank)，无相关文档召回时该查询 RR=0。
+  MRR     = mean(1 / 首个相关文档在返回列表里的位次)，无相关文档召回时该查询 RR=0。
+             —— 位次由评测方按返回顺序数出来，不用被测方自报的 rank 字段。
              —— 衡量「相关文档排得够不够靠前」。
 
 不变量：
@@ -55,13 +56,20 @@ def recall_at_k(hits: Sequence[Dict[str, Any]], relevant: Sequence[str], k: int)
 
 
 def reciprocal_rank(hits: Sequence[Dict[str, Any]], relevant: Sequence[str]) -> float:
-    """RR：首个相关文档 rank 的倒数；未召回相关文档时为 0.0。"""
+    """RR：首个相关文档在**返回列表里的位次**的倒数；未召回相关文档时为 0.0。
+
+    位次取 `enumerate` 的下标，不取 hit 自报的 `rank` 字段。原因：`rank` 是被测
+    系统自己写进响应体的，用被测方自报的位次去评被测方的排序质量，等于让它自己
+    给自己打分——`BUG_RAG_SORT_ASC`（分数升序）与并列顺序缺陷恰好都污染这个字段，
+    此时 RR 会显示 1.0，把真实的排序缺陷盖过去。
+    位次是评测方观察到的事实，rank 字段只是被测方的一句话。
+    """
     expected = {str(doc_id) for doc_id in relevant}
     if not expected:
         return 0.0
-    for hit in hits or []:
+    for position, hit in enumerate(hits or [], start=1):
         if str(hit.get("doc_id")) in expected:
-            return 1.0 / max(int(hit.get("rank") or 1), 1)
+            return 1.0 / position
     return 0.0
 
 

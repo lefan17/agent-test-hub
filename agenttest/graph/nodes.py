@@ -254,9 +254,15 @@ def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase,
     """
     if check.type == "rag_hits_include":
         wanted = list(check.doc_ids or ([check.target] if check.target else []))
+        if not wanted:
+            return {"ok": False,
+                    "detail": "用例没有声明要命中的 doc_id（doc_ids 与 target 都为空），"
+                              "无法判定——声明缺失按失败处理"}
         got = {str(h.get("doc_id")) for h in hits}
         missing = [doc_id for doc_id in wanted if doc_id not in got]
-        return {"ok": not missing, "detail": f"命中缺少 {missing}（实际 {sorted(got)}）"}
+        if missing:
+            return {"ok": False, "detail": f"命中缺少 {missing}（实际 {sorted(got)}）"}
+        return {"ok": True, "detail": f"命中包含 {wanted}（实际 {sorted(got)}）"}
     if check.type == "rag_rank_monotonic":
         return check_rank_monotonic(hits)
     if check.type == "rag_tie_by_doc_id":
@@ -265,13 +271,24 @@ def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase,
         dups = find_duplicate_hits(hits)
         return {"ok": not dups, "detail": f"hits 中重复出现的 doc_id: {dups}"}
     if check.type == "rag_recall_at_least":
+        if not case.rag_relevant:
+            return {"ok": False,
+                    "detail": "用例没有标注相关文档（rag_relevant 为空），recall 无定义——"
+                              "标注缺失按失败处理，不按「无可漏项」记满分"}
         value = recall_at_k(hits, case.rag_relevant, case.top_k)
-        return {"ok": value + 1e-12 >= check.threshold,
+        if value + 1e-12 >= check.threshold:
+            return {"ok": True, "detail": f"recall@{case.top_k}={value:.6f} >= 阈值 {check.threshold}"}
+        return {"ok": False,
                 "detail": f"recall@{case.top_k}={value:.6f} < 阈值 {check.threshold}"}
     if check.type == "rag_mrr_at_least":
+        if not case.rag_relevant:
+            return {"ok": False,
+                    "detail": "用例没有标注相关文档（rag_relevant 为空），MRR 无定义——"
+                              "标注缺失按失败处理，不按「无可漏项」记满分"}
         value = reciprocal_rank(hits, case.rag_relevant)
-        return {"ok": value + 1e-12 >= check.threshold,
-                "detail": f"MRR={value:.6f} < 阈值 {check.threshold}"}
+        if value + 1e-12 >= check.threshold:
+            return {"ok": True, "detail": f"MRR={value:.6f} >= 阈值 {check.threshold}"}
+        return {"ok": False, "detail": f"MRR={value:.6f} < 阈值 {check.threshold}"}
     if check.type == "rag_status":
         expected = int(check.threshold) if check.threshold else case.expected_status
         return {"ok": int(status) == expected,

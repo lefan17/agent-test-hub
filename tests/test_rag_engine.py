@@ -201,6 +201,28 @@ def test_reciprocal_rank_uses_first_relevant_rank():
     assert reciprocal_rank(HITS, ["Z"]) == pytest.approx(0.0)
 
 
+def test_reciprocal_rank_ignores_the_rank_field_claimed_by_the_service():
+    """位次必须由评测方按返回顺序数出来，不能采信被测系统自报的 rank 字段。
+
+    `rank` 写在响应体里，是被测方的一句话；`BUG_RAG_SORT_ASC`（分数升序）与并列
+    顺序缺陷都会污染它。若 RR 采信它，排序缺陷发生时 RR 反而显示 1.0，把缺陷盖掉。
+    """
+    # 返回顺序是 B 在前、A 在后，但两个 hit 都把 rank 谎报成 1
+    lying = [{"doc_id": "B", "score": 1.0, "rank": 1},
+             {"doc_id": "A", "score": 1.0, "rank": 1}]
+    assert reciprocal_rank(lying, ["A"]) == pytest.approx(0.5)   # 按位置：第 2 位
+    assert reciprocal_rank(lying, ["B"]) == pytest.approx(1.0)   # 按位置：第 1 位
+
+    # rank 被整体倒序写（rank 5 的其实排在第一）时，也按位置算
+    reversed_ranks = [{"doc_id": "A", "score": 9.0, "rank": 5},
+                      {"doc_id": "B", "score": 1.0, "rank": 1}]
+    assert reciprocal_rank(reversed_ranks, ["B"]) == pytest.approx(0.5)
+
+    # rank 缺失或为 None 时同样按位置，而不是退回 1.0
+    no_rank = [{"doc_id": "X", "score": 9.0}, {"doc_id": "A", "score": 1.0}]
+    assert reciprocal_rank(no_rank, ["A"]) == pytest.approx(0.5)
+
+
 def test_mean_reciprocal_rank_averages():
     assert mean_reciprocal_rank([1.0, 0.5, 0.0]) == pytest.approx(0.5)
     assert mean_reciprocal_rank([]) == 0.0
