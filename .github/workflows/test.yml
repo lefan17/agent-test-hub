@@ -78,13 +78,35 @@ jobs:
       # 于是 tests/conftest.py 的 `from demo_app.app import create_app` 直接
       # ModuleNotFoundError，整个套件一条都跑不起来（exit code 4）。
       # `python -m pytest` 会把当前目录加进 sys.path[0]，与 README 里记载的本地命令一致。
-      - name: 运行测试套件 + 覆盖率门槛（161 passed, 15 xfailed, 0 failed）
+      - name: 运行测试套件 + 覆盖率门槛（301 passed, 15 xfailed, 0 failed）
         run: |
           python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
             --cov=agenttest --cov=demo_app \
             --cov-report=term-missing \
+            --cov-report=json:.coverage.json \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=${{ env.COV_FAIL_UNDER }}
+
+      # ------------------------------------------------------------------
+      # per-file 覆盖率门禁：补上仓库级 fail_under 结构性看不见的那块。
+      #
+      # 为什么需要它：上面那一步的 70 是**仓库级**门槛。本仓的活证据是
+      # agenttest/runner.py —— 126 语句 / 34 分支的系统主入口，原先是 0%
+      # 覆盖，而总覆盖率仍有 76.88%、照样绿。换句话说：把整个 CLI 删掉，
+      # 仓库级门禁也不会响。仓库自己早就把这件事写在 README 里（「60/65/70/75
+      # 抓到的都是同样这 3 个文件」），只是一直没有工具去判。
+      #
+      # 为什么是独立一步而不是塞进上一条命令：coverage 7.16.2 的
+      # CoverageConfig **没有** per-file 的 fail_under（只有全局那个），
+      # 所以只能读 `--cov-report=json` 的产物自己判。独立一步的另一个好处
+      # 是失败信息独立成段，日志里一眼能看到是哪个文件、缺哪些行。
+      #
+      # 配置住在 pyproject.toml 的 [tool.coverage.perfile]（coverage 不读
+      # 那张表，读它的是 scripts/check_coverage.py）。门槛是棘轮不是目标。
+      # ------------------------------------------------------------------
+      - name: per-file 覆盖率门禁（拦单点失守）
+        if: always()
+        run: python scripts/check_coverage.py
 
       # 覆盖率报告作为构建产物留档：面试时可以直接下载 XML 佐证数字。
       - name: 上传覆盖率报告
@@ -106,14 +128,14 @@ jobs:
       # 这不等于可以不管：日志里能看到这条命令的真实计数与报错。
       # 但若环境能探测到 Chrome 却禁止它创建子进程（例如受限沙箱），
       # 这 4 条会以 failed 收场，且与仓库代码无关。
-      # 实测：CI runner 上探测不到 Chrome → 161 passed, 4 skipped, 15 xfailed；
-      # 本机（Chrome 可用、可起子进程）→ 165 passed, 15 xfailed。
+      # 实测：CI runner 上探测不到 Chrome → 297 passed, 4 skipped, 15 xfailed；
+      # 本机（Chrome 可用、可起子进程）→ 301 passed, 15 xfailed。
       # 这里跑全量套件（而非只跑 UI 文件），是为了让 CI 的这条命令与
       # README 的 `.venv/Scripts/python.exe -m pytest -q` 一一对应。
       #
       # 注意：这一步不加 --cov-fail-under。它跑的是全量套件，与上面那条
       # 「非 UI + 覆盖率门槛」的门禁是两件事，门槛只在上面那条命令上生效。
-      - name: 运行全量套件含 UI（161 passed, 4 skipped, 15 xfailed：CI runner 探测不到 Chrome）
+      - name: 运行全量套件含 UI（297 passed, 4 skipped, 15 xfailed：CI runner 探测不到 Chrome）
         continue-on-error: true
         run: python -m pytest -o addopts= -q
 

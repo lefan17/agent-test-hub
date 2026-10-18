@@ -124,6 +124,39 @@ source = ["agenttest", "demo_app"]
 # __main__.py 只是 CLI 薄壳（3 行 argparse 转发），单独跑它没有断言价值
 omit = ["agenttest/__main__.py"]
 
+[tool.coverage.perfile]
+# per-file 覆盖率门禁的配置。coverage **不读这张表**（7.16.2 的
+# CoverageConfig 只有全局 fail_under，没有 per-file 版本），读它的是
+# scripts/check_coverage.py。也就是说：改了这张表不会自动生效，
+# 必须让那个脚本在 CI 里跑起来才算门禁。
+#
+# 为什么需要它：下面 [tool.coverage.report] 的 fail_under = 70 是**仓库级**
+# 门槛，结构上看不见单点失守。本仓活证据就是 agenttest/runner.py ——
+# 126 语句 / 34 分支，原先是 0% 覆盖，而总覆盖率仍有 76.88%、照样高于 70。
+# 也就是说：把这套系统的**主入口**整个删掉，70 这道门禁也不会响。
+#
+# 门槛取 60 是**棘轮**，不是目标：
+#   1. 首轮先取 30，只抓 runner.py 一个文件，跑出那条可解释的红
+#      （`runner.py 0.0% (126 stmts, missing 10-198)`），留证后再修；
+#   2. 补完 runner.py 的 CLI 级测试（0% → 92.5%）与 spec_tool / config /
+#      ui_tool 的错误分支后，本机实测参与判定的 16 个文件最低是
+#      demo_app/rag.py 81.1%，于是抬到 60；
+#   3. 以后每清完一轮再抬，每轮只抬一次。
+#
+# 为什么不一次抬到 75：离 rag.py（81.1%）只剩 6pp，随便加一个分支就红。
+# 门槛是为了拦退化，不是为了制造噪音 —— 一个经常无故变红的门禁，
+# 最后一定会被 `continue-on-error` 绕过，那比没有门禁更坏（本仓有前例：
+# `ruff format` 曾长期挂着 COE）。
+fail_under = 60
+# 语句数低于此的文件不参与判定：3 行文件的百分比噪音太大，而且它们
+# 通常是薄壳（本仓的 __main__.py 已在 [tool.coverage.run] 的 omit 里）。
+min_statements = 10
+# 排除项：每条都要能说清「为什么 0% 不是质量问题」。
+# 本仓目前**不需要**排除任何文件，所以这里是空的 —— 刻意留空，
+# 因为空清单是可验证的状态（脚本会核对每个路径真实存在），
+# 而一条随手写的排除会让这张清单慢慢变成静音名单。
+exclude = []
+
 [tool.coverage.report]
 # 实测（2026-10 本机 .venv，Python 3.12.10）：
 #   python -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \

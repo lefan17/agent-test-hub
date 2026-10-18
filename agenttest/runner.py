@@ -33,7 +33,17 @@ class DemoServer:
         from demo_app.app import create_app
 
         self.url = url.rstrip("/")
-        port = int(url.rsplit(":", 1)[-1])
+        raw_port = self.url.rsplit(":", 1)[-1]
+        try:
+            port = int(raw_port)
+        except ValueError:
+            # 用户把 `--demo-url` 写成不带端口的形式时，原先直接抛
+            # `ValueError: invalid literal for int()`，看不出是哪个参数错了。
+            # 换成能照着改的报错：说清楚要什么、收到了什么。
+            raise ValueError(
+                f"--demo-url 需要带端口的完整地址，例如 http://127.0.0.1:5001"
+                f"（收到 {url!r}，解析出的端口部分是 {raw_port!r}）"
+            ) from None
         self._server = make_server("127.0.0.1", port, create_app(), threaded=True)
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 

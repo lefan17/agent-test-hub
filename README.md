@@ -40,7 +40,7 @@
 - **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、缺陷证据与截图（截图仅在 UI 用例真正跑通时产生）、以及「本轮是否降级为规则引擎」的显式声明
 - **自带被测系统**：Flask Demo 应用注入 2 个 API 契约缺陷 + 1 处 Flaky 注入 + 6 个 RAG 检索缺陷开关（覆盖 9 个缺陷面），Agent 演示「发现缺陷」而非「跑一遍全绿」
 - **零新增依赖**：RAG 检索默认后端用纯标准库实现 BM25（`demo_app/rag.py`），不引入 rank_bm25 / jieba / numpy 等任何检索库，离线确定性可回归
-- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率门槛（实测分支覆盖 76.88% / 门槛 70%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
+- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率双重门槛（仓库级 70% + **per-file 60%**，实测分支覆盖 91.16% ~ 91.27%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
 
 ## 工程化能力
 
@@ -49,7 +49,8 @@
 | 能力 | 落地位置 | 怎么用 |
 | --- | --- | --- |
 | 容器化 | `Dockerfile`、`docker-compose.yml` | `docker compose --profile app up --build` / `--profile test up --build` |
-| 覆盖率门槛 | `pyproject.toml [tool.coverage.*]`、CI `test` job | `--cov=agenttest --cov=demo_app --cov-fail-under=70` |
+| 覆盖率门槛（仓库级） | `pyproject.toml [tool.coverage.report]`、CI `test` job | `--cov=agenttest --cov=demo_app --cov-fail-under=70` |
+| 覆盖率门槛（**每文件**） | `[tool.coverage.perfile]`、`scripts/check_coverage.py`、CI 独立一步 | `python scripts/check_coverage.py` → 逐文件判 `fail_under`；拦得住「单点失守」，仓库级拦不住 |
 | 静态类型 | `pyproject.toml [tool.mypy]`、CI `lint` job | `python -m mypy` → `Success: no issues found in 24 source files` |
 | 代码规范 | `pyproject.toml [tool.ruff]`、CI `lint` job、pre-commit | `python -m ruff check .` → `All checks passed!` |
 | 漏洞扫描 | `.github/dependabot.yml`、CI `security` job | `pip-audit -r requirements.lock`（**非阻塞**，理由见下） |
@@ -67,37 +68,58 @@
 实测命令与结果（本机 `.venv`，Python 3.12.10）：
 
 ```bash
-# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1500 stmts / 311 miss / 420 branch = 76.88%
+# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1504 stmts / 420 branch = 91.16% ~ 91.27%
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing
-
-# 对照：关掉分支覆盖（临时 --cov-config，内容只有 [run] branch = false）
-#   → TOTAL 1505 stmts / 315 miss = 79.07%
-# 分支覆盖默认比语句覆盖低约 2.2 个百分点，换来的信息量更大，因此默认开着。
 ```
 
-**CI 门槛取 70**，理由：低于两条实测口径（语句覆盖 79.07% / 分支覆盖 76.88%），留约 6.9 个百分点的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么，按当前总数（1500 语句 + 420 分支）反推如下——**实测口径，不是估算**：
+> 上面这个 91.16% ~ 91.27% 是 2026-10-18 补完 `runner.py` / `config.py` / `spec_tool.py` /
+> `ui_tool.py` 四处缺口之后的数字；补之前是 **76.88%**（1500 stmts / 311 miss）。
+> 写成区间是因为它**不写死**：连跑 3 次得到 91.16% / 91.27% / 91.16%，差异来自
+> `demo_app/rag.py` 那个 10% 概率返回 503 的注入缺陷（`FLAKY-001`）——命中重试路径时
+> 多覆盖 1 行、少 1 行未覆盖。差 0.11pp，比门槛余量小两个数量级，不影响任何判定。
+> 补的是真缺口，不是为凑数字写的空测试 —— 每一处都对应一个「原来没人验证、
+> 坏了也不会有人知道」的行为，细节见下面的「覆盖率短板」表与
+> `tests/test_runner_cli.py` / `tests/test_config.py` / `tests/test_spec_tool.py` /
+> `tests/test_ui_tool_errors.py` 的文件头注释。
+
+**CI 门槛取 70**，理由：低于实测口径（分支覆盖 91.16% ~ 91.27%），留出约 21pp 的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么——**实测口径，不是估算**：
 
 | 假设的退化 | 反推覆盖率 | 是否击穿 70 |
 | --- | --- | --- |
-| `agenttest/graph/nodes.py`（254 行）整体失去覆盖 | 60.5% | ✅ 拦得住 |
-| `demo_app/rag.py`（264 行）整体失去覆盖 | 62.6% | ✅ 拦得住 |
-| `demo_app/app.py`（180 行）整体失去覆盖 | 66.7% | ✅ 拦得住 |
-| `agenttest/brain/llm_brain.py`（110 行）整体失去覆盖 | 70.7% | ❌ 拦不住 |
+| `demo_app/rag.py`（264 行，已覆盖 215）整体失去覆盖 | 78.3% | ❌ 拦不住 |
+| `agenttest/graph/nodes.py`（254 行，已覆盖 232）整体失去覆盖 | 77.1% | ❌ 拦不住 |
+| `demo_app/app.py`（180 行，已覆盖 166）整体失去覆盖 | 81.5% | ❌ 拦不住 |
+| `agenttest/runner.py`（126 行，已覆盖 120）整体失去覆盖 | 84.6% | ❌ 拦不住 |
+| `agenttest/brain/llm_brain.py`（110 行，已覆盖 97）整体失去覆盖 | 86.1% | ❌ 拦不住 |
 
-**诚实结论：70 这个门槛能拦住「大模块整体失守」（上表三个都拦得住），但拦不住单个中小模块的完全失守（`llm_brain.py` 丢掉全部 110 行仍剩 70.7%）。** 之所以不往上抬：那会把门槛压到分支口径实测值（76.88%）之上，CI 首次运行就是红的，只能靠删测试或写无意义测试来凑，属于自欺。真正能拦住单模块退化的手段是**每文件门槛**（`[tool.coverage.report]` 的 per-file `fail_under`，或 Codecov 的 patch coverage），本仓库尚未启用，已记入 CHANGELOG 的 Unreleased 段作为后续任务。
+**这张表在本轮之后几乎全是「拦不住」，这不是退步，是仓库级门槛的固有性质**：分母（1504 语句）越大，单个文件占比越小，任何一个文件整个失守都撼动不了总量。70 这道门现在只剩一个作用——拦住「大面积同时失守」（例如换掉整个 `agenttest/tools/` 目录）。
 
-> 门槛还刻意留出了抖动幅度：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`）。本机连跑 5 次：4 次 **76.88%**、1 次 **76.98%**（差 2 行覆盖；抖动方向与重试路径一致，但未单独验证归因），但门槛取 70 也是为了在这种抖动真的出现时不至于间歇性变红——间歇性红最终一定会被人用重跑糊过去。
+真正拦住单点退化的手段是**每文件门槛（per-file gate）**，本轮已经落地：`scripts/check_coverage.py` 读 `--cov-report=json` 的产物，按 `pyproject.toml` 的 `[tool.coverage.perfile]` 逐个文件判。当前的活证据是 `agenttest/runner.py`：它是这套系统的主入口，**原先是 0% 覆盖（126 语句 / 34 分支，missing 10-198 全段），而仓库级 70 这道门照样绿**。把它补到 92.5% 之后，本轮参与判定的 16 个文件最低是 `demo_app/rag.py` 81.1%，于是 per-file 门槛从首轮的 30（刻意只抓 `runner.py` 一个）抬到 **60**。
 
-覆盖率短板（`--cov-report=term-missing` 实测，按缺失语句数排序）：
+> 关于抖动：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），它让总量在 **91.16% ~ 91.27%** 之间摆 0.11pp。这个幅度对 70 这道门完全不构成威胁（余量 21pp）。**反倒是上一版配置的风险更大**：当时总量 76.88%、门槛 70，只有 6.9pp 余量，而同一个缺陷的抖动理论上能吃掉其中相当一部分 —— 一个只剩几个百分点余量的门槛，迟早会在某个倒霉的 PR 上间歇性变红，然后被人用重跑糊过去。这也是本轮把测试补齐之后的一个副产品：门槛没变，但它从「刚好够用」变成了「有真实余量」。
 
-| 文件 | 覆盖 | 未覆盖的原因 |
+覆盖率短板（`--cov-report=term-missing` 实测，按缺失语句数排序）——**2026-10-18 之前的表**：
+
+| 文件 | 覆盖（旧） | 未覆盖的原因 |
 | --- | --- | --- |
 | `agenttest/runner.py` | **0%**（122 行全未覆盖） | CLI 入口与退出路径。测试套件直接调用 `build_context()`/图节点，不 fork 子进程跑 CLI |
 | `agenttest/config.py` | 39% | 环境分层的档案读取与 `pick_int` 异常分支：既有测试不设置 `AGENTTEST_ENV`/`AGENTTEST_MAX_ATTEMPTS`，走不到 |
 | `agenttest/tools/ui_tool.py` | 78% | Chrome 无头 / Selenium 分支：本条覆盖率口径是 `--ignore=tests/test_ui_tool.py`，UI 用例被排除在外；在禁止创建子进程的环境里 Chrome 也起不来，两条分支都走不到 |
 | `agenttest/tools/spec_tool.py` | 32% | 需要真实 HTTP 拉取 `/openapi.json`；端到端用例只覆盖了它的一部分 |
 | `agenttest/brain/llm_brain.py` | 84% | 联网调用与结构化解析那几行；失败降级路径与缺陷关联用例的白名单/兜底都有单测覆盖（见 `tests/test_llm_brain.py`） |
+
+**这张表已经被逐条处理（2026-10-18）**，现在的实际数字：
+
+| 文件 | 覆盖（今） | 补了什么 |
+| --- | --- | --- |
+| `agenttest/runner.py` | **0% → 92.5%** | `tests/test_runner_cli.py`：`parse_args` 每个 flag 与非法值、`pick_brain` 三种分支、`wait_for_health` 超时/重试、`DemoServer` 生命周期、`main` 的 0/1 两条退出路径。这是本轮最重要的一处 —— 它曾经让「主入口整个失效」在 CI 里看不出来 |
+| `agenttest/config.py` | **39% → 97.4%** | `tests/test_config.py`：三层优先级（环境变量 > 档案 > 代码默认）逐层验证、dotenv 不覆盖已有变量、非法环境名报错、`llm_configured` 真假两态、`_find_chrome` 的路径有效性 |
+| `agenttest/tools/ui_tool.py` | **78% → 99.2%** | `tests/test_ui_tool_errors.py`：chrome 非零退出/空输出、无 Chrome 时抛 `UiUnavailableError`、**未实现的断言类型必须判失败**（两个后端各测一遍）、selenium 异常时 driver 仍 quit |
+| `agenttest/tools/spec_tool.py` | **32% → 100%** | `tests/test_spec_tool.py`：缺 `paths`、非法 JSON、非 dict 响应等契约解析异常分支 |
+| `agenttest/brain/llm_brain.py` | **84.3%**（未动） | 联网调用那几行需要真实 API key，留给 `pytest -m llm` 的冒烟用例（手动触发，不进 PR 门禁） |
+
+**为什么这几处值得补，而不是「为凑数字」**：它们共同的特征是**坏了不会有任何一条现有测试变红**。`runner.py` 是极端例子 —— 它 0% 覆盖时，全仓总量仍是 76.88%、稳稳高于 70 那道门。**零覆盖的文件对一个「总量百分比」门禁的贡献是零，所以它对总量门禁完全隐形**：删掉它、写坏它、让它天天抛异常，总量都不动。这正是 per-file 门槛存在的理由，也是「补上它之后总量门禁反而更没用了」的原因（见上表的反推）。
 
 其余模块普遍 80%~100%（`models.py`、`rag_metrics.py`、`graph/*` 均接近满分）。`agenttest/__main__.py` 是 3 行 CLI 薄壳，已在 `[tool.coverage.run] omit` 中排除——单独跑它没有断言价值。
 
@@ -115,29 +137,35 @@
 | `pip-audit` | **未验证** | 需创建临时虚拟环境，沙箱拒绝 `ensurepip`（`PermissionError: [WinError 5]`）；且它把缓存写死在 `%LOCALAPPDATA%\pip-audit`，`--cache-dir` 也绕不过。仅在 CI 的 `security` job 里被真实验证。配置已就位，本地从未跑通。 |
 | `pre-commit` | **未验证** | 同上（hook 需要独立虚拟环境）。配置仅通过 `yaml.safe_load` 静态语法校验；等价检查由 CI 的 `lint` job 承担。 |
 | `commitlint` 完整 CLI | **未验证** | `npm install` 已走本机代理成功（`node_modules/` 存在），`commitlint.config.mjs` 的语法与规则已用真实 `@commitlint/load` + `@commitlint/lint` 验证（7 个用例全部符合预期）。但 commitlint CLI 会 spawn `git` 取提交信息，沙箱命名管道限制让 `spawn` 报 `Error: spawn EPERM`——沙箱边界，非配置问题。`.husky/commit-msg` 同样未真实触发。CI 的 `commit-msg` job 覆盖同一份规则。 |
-| `requirements-dev.txt` 钉的两个版本 | **无法核对** | `pre-commit==4.3.0` 与 `commitizen==4.9.1` **本机从未安装过**（沙箱拒绝建 venv），版本号无法核对。其余六个包（pytest-cov / coverage / ruff / mypy / pip-audit / pip-tools）已用 `importlib.metadata` + `pip show` 双口径实测，**与钉版逐条一致**（详见该文件顶部核对表）。另：本机这三个包是从同机另一个 3.12 venv 复制到 `site-packages` 的，不是 `pip install` 进来的——「覆盖率 76.88%」「ruff 全绿」是真跑出来的，但 CI 能否解析安装这些版本号，只能等 CI 首次运行。 |
+| `requirements-dev.txt` 钉的两个版本 | **无法核对** | `pre-commit==4.3.0` 与 `commitizen==4.9.1` **本机从未安装过**（沙箱拒绝建 venv），版本号无法核对。其余六个包（pytest-cov / coverage / ruff / mypy / pip-audit / pip-tools）已用 `importlib.metadata` + `pip show` 双口径实测，**与钉版逐条一致**（详见该文件顶部核对表）。另：本机这三个包是从同机另一个 3.12 venv 复制到 `site-packages` 的，不是 `pip install` 进来的——「覆盖率 91%」「ruff 全绿」是真跑出来的，但 CI 能否解析安装这些版本号，只能等 CI 首次运行。 |
 
 
 ## 测试套件
 
-采集数 **180**（不含 UI 时 176 = 161 passed + 15 xfailed；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（PowerShell 5.1 / Python 3.12.10）：
+采集数 **316**（不含 UI 时 312 = 297 passed + 15 xfailed；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（Python 3.12.10）：
 
 ```bash
 # 全量（含 UI）：其中 4 条依赖真实浏览器，能启动 Chrome 子进程时全部通过
 # （在禁止创建子进程的环境里这 4 条会失败，与代码无关，故 CI 那一步设了 continue-on-error）
-.venv/Scripts/python.exe -m pytest -q            # 165 passed, 15 xfailed
+.venv/Scripts/python.exe -m pytest -q            # 301 passed, 15 xfailed
 
 # 不含 UI：CI 的阻塞口径
-.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 161 passed, 15 xfailed, 0 failed
+.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 297 passed, 15 xfailed, 0 failed
 
 # 带覆盖率门槛（CI test job 同一条命令）
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
-    --cov=agenttest --cov=demo_app --cov-report=term-missing --cov-fail-under=70
-#   → 161 passed, 15 xfailed, 1 warning；TOTAL 1500 stmts / 311 miss / 420 branch = 76.88%
+    --cov=agenttest --cov=demo_app --cov-report=term-missing \
+    --cov-report=json:.coverage.json --cov-fail-under=70
+#   → 297 passed, 15 xfailed, 1 warning；TOTAL 1504 stmts / 420 branch = 91.16% ~ 91.27%
 #   → Required test coverage of 70.0% reached.
+
+# per-file 门禁（读上一条命令产出的 .coverage.json）
+.venv/Scripts/python.exe scripts/check_coverage.py
+#   → [coverage-perfile] 门槛 60%（分支口径）· 参与 16 个文件（语句数 ≥ 10）· 排除 0 项
+#   → [coverage-perfile] 通过：所有参与判定的文件都不低于 60%
 ```
 
-> `-o addopts=` 不能省：`pyproject.toml` 里 `addopts = "-q"`，而 `-q` 会把末尾的 `161 passed, ...` 汇总行一起吞掉；命令行覆盖为空之后计数才会出现在输出与 CI 日志里。
+> `-o addopts=` 不能省：`pyproject.toml` 里 `addopts = "-q"`，而 `-q` 会把末尾的 `297 passed, ...` 汇总行一起吞掉；命令行覆盖为空之后计数才会出现在输出与 CI 日志里。
 
 | 文件 | 条数 | 覆盖 |
 | --- | --- | --- |
@@ -152,10 +180,15 @@
 | `tests/test_api_tool.py` | 4 | 接口工具集成 |
 | `tests/test_mock_brain.py` | 7 | 规划与归因 |
 | `tests/test_report.py` | 3 | 报告渲染（含「降级必须在报告里可见」） |
-| `tests/test_runner_e2e.py` | 1 | 端到端（必须发现 contract+bug 缺陷） |
+| `tests/test_runner_e2e.py` | 1 | 端到端（必须发现 contract+bug 缺陷）。**注意：它绕过 runner 直接调 `graph.invoke`，所以它不能证明 CLI 能用** —— CLI 那层的证明在 `test_runner_cli.py` |
+| `tests/test_runner_cli.py` | **27** | `runner.py` 的 CLI 级测试（2026-10-18 补）：`parse_args` 的每个 flag 与非法值、`pick_brain` 的三种分支、`wait_for_health` 的超时与重试、`DemoServer` 生命周期与端口解析报错、`main()` 返回 0/1 两条退出路径。这一层原先 0% 覆盖 |
+| `tests/test_config.py` | **40** | `config.py` 的三层优先级（环境变量 > 档案 > 代码默认）逐层验证、dotenv 不覆盖已有变量、非法环境名报错、`llm_configured` 真假两态、`_find_chrome` 的路径有效性（2026-10-18 补） |
+| `tests/test_spec_tool.py` | **13** | 契约解析的异常分支：缺 `paths`、非法 JSON、非 dict 响应（2026-10-18 补） |
+| `tests/test_ui_tool_errors.py` | **31** | UI 工具的**出错路径**（不依赖浏览器）：chrome 非零退出/空输出、无 Chrome 时抛 `UiUnavailableError`、未实现断言类型必须判失败（两个后端各测）、selenium 异常时 driver 仍 quit（2026-10-18 补） |
+| `tests/test_check_coverage_script.py` | **25** | per-file 门禁脚本自身的测试：配置缺失要退出 1 不是静默通过、排除路径写错要报错、失败输出按百分比升序、JSON 里改低 1pp 必须被抓到（2026-10-18 补） |
 | `tests/test_ui_tool.py` | 4 | UI 工具（**需能真正启动的 Chrome**；在禁止创建子进程的环境里这 4 条会失败，与代码无关） |
 
-15 项 xfail 是**缺陷基准**：用 `@pytest.mark.xfail(strict=True)` 包住「断言契约期望行为」的用例——缺陷存在则 xfail，缺陷被修好会 XPASS 报错提醒更新基准。另有「钉住当前实际行为」的用例直接断言缺陷现状。4 条 UI 用例的结果取决于运行环境：本机**装了** Chrome（`C:\Program Files\Google\Chrome\Application\chrome.exe`），能启动 Chrome 子进程时 4 条全部通过（即上面的 165 passed）；在禁止创建子进程的环境里它们会以 failed 收场（例如 `crashpad_client_win.cc:430 OpenProcess: 拒绝访问 (0x5)`），与代码无关，因此 CI 里那条全量命令设了 `continue-on-error`。
+15 项 xfail 是**缺陷基准**：用 `@pytest.mark.xfail(strict=True)` 包住「断言契约期望行为」的用例——缺陷存在则 xfail，缺陷被修好会 XPASS 报错提醒更新基准。另有「钉住当前实际行为」的用例直接断言缺陷现状。4 条 UI 用例的结果取决于运行环境：本机**装了** Chrome（`C:\Program Files\Google\Chrome\Application\chrome.exe`），能启动 Chrome 子进程时 4 条全部通过（即上面的 301 passed）；在禁止创建子进程的环境里它们会以 failed 收场（例如 `crashpad_client_win.cc:430 OpenProcess: 拒绝访问 (0x5)`），与代码无关，因此 CI 里那条全量命令设了 `continue-on-error`。
 
 ## 架构
 
@@ -428,7 +461,7 @@ sequenceDiagram
 │  ├─ report/            # HTML 报告渲染
 │  ├─ config.py / models.py / runner.py   # config.py 含 dev/staging/prod 环境分层
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（180 collected：161 passed + 15 缺陷基准 xfail + 4 UI 需浏览器）
+├─ tests/                # 项目自身 pytest（316 collected：301 passed + 15 缺陷基准 xfail，其中 4 条 UI 需浏览器）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示
 │  ├─ check_commit_msg.py  # 零依赖的 Conventional Commits 校验（无 Node 环境的降级路径）
@@ -460,7 +493,7 @@ sequenceDiagram
   实测代价：2026-10-13 的 4 个 dependabot PR 各留了一个 issue（标题形如「CI 失败：5/merge」），失败原因完全相同。想接企业微信/钉钉机器人（需要 webhook secret）的做法写在 workflow 的注释里，代码中刻意不引用不存在的 secret。
 - **为什么同时有 commitlint 和 scripts/check_commit_msg.py？** commitlint 要求本机有 Node + `npm install`；在只有 Python 的机器上就废了。Python 版零依赖，是**降级路径**而非重复劳动，也保证即使移掉 `package.json`，提交规范门禁依然成立。
   两者还有一个不对称之处：Python 版按作者跳过机器人提交（`SKIP_AUTHORS = ("dependabot[bot]", "github-actions[bot]")`），commitlint 只拿到提交文本、拿不到作者。所以 Dependabot 的分组升级标题（固定句式，实测 76/77 字符，超过本仓 72 上限）只在 commitlint 这一侧判红。处理方式是给 `commitlint.config.mjs` 加一条只匹配该固定句式的 `ignores`，**长度上限本身没有放宽**——它是给人的约束，不该为了迁就机器人而对所有人工提交一起放松。
-- **`ruff format` 为什么一开始没启用、后来为什么又启用了？** 起初实测 `ruff format --check .` → 「35 files would be reformatted, 11 files already formatted」（EXIT=1）。挂进 pre-commit 后任何人 commit 一次就会被强制格式化 35 个业务文件，跨越当时「只动工程化外壳」的边界，所以先只跑 `ruff check`。**2026-10-18 把存量一次清完**：`ruff format .` 重排 38 个文件、12 个已合规，重排后 `50 files already formatted`；同一棵树复跑 `pytest -o addopts= -q` 仍是 **165 passed / 15 xfailed**、`python -m mypy` 仍是 **24 source files 零问题**——证明这次重排只动空白。存量清零之后才把 `ruff-format` 同时挂进 pre-commit 与 CI 的 `lint` job（两边同一口径，都跑 `--check`），此后再有人提交未格式化的代码会当场被拦。
+- **`ruff format` 为什么一开始没启用、后来为什么又启用了？** 起初实测 `ruff format --check .` → 「35 files would be reformatted, 11 files already formatted」（EXIT=1）。挂进 pre-commit 后任何人 commit 一次就会被强制格式化 35 个业务文件，跨越当时「只动工程化外壳」的边界，所以先只跑 `ruff check`。**2026-10-18 把存量一次清完**：`ruff format .` 重排 38 个文件、12 个已合规，重排后 `50 files already formatted`；同一棵树复跑 `pytest -o addopts= -q` 仍是 **301 passed / 15 xfailed**、`python -m mypy` 仍是 **24 source files 零问题**——证明这次重排只动空白。存量清零之后才把 `ruff-format` 同时挂进 pre-commit 与 CI 的 `lint` job（两边同一口径，都跑 `--check`），此后再有人提交未格式化的代码会当场被拦。
 
 ## License
 
