@@ -21,6 +21,72 @@
 依赖锁文件、pre-commit、协作模板、提交规范工具化、CI 定时与失败通知、
 环境分层。**不改任何业务逻辑与既有测试断言。**
 
+### 新增（2026-10-18：per-file 覆盖率门禁，补上仓库级门槛结构性看不见的那块）
+
+**先讲清为什么要做这件事。** 仓库级 `--cov-fail-under=70` 有一个结构性盲区：它只看总量。
+本仓的活证据是 `agenttest/runner.py` —— 126 语句 / 34 分支的系统主入口，
+**原先是 0% 覆盖（missing 10-198 全段）**，而总覆盖率仍有 76.88%、稳稳高于 70。
+也就是说：把这套系统的 CLI 整个删掉，70 这道门禁不会响。一个 0% 的文件对
+「总量百分比」的贡献是零，所以它对总量门禁完全隐形。
+（这件事 README 早就写清楚了，只是当时没有工具去判 —— 记在旧 Unreleased 段的
+「后续任务」里。）
+
+- **`scripts/check_coverage.py`（新增，约 300 行）**：读 `--cov-report=json` 的产物，
+  按 `pyproject.toml` 的 `[tool.coverage.perfile]` 逐文件判是否达标。
+  之所以要自己写：**coverage 7.16.2 的 `CoverageConfig` 只有全局 `fail_under`，
+  没有 per-file 版本**（`[a for a in dir(CoverageConfig()) if 'fail' in a]` 实测只返回
+  `['fail_under']`），所以只能读 JSON 自己判。
+  四条刻意的设计：① 配置缺失（缺 `[tool.coverage.perfile]` 表 / 缺 `fail_under` /
+  缺 `min_statements` / 缺 JSON 产物）一律**退出 1**，不静默通过 ——
+  一个「配置写错就等于没门禁」的门禁是最坏的门禁；② `exclude` 里每条路径都要
+  **验证真实存在**，写错的排除等于「看起来写了实际没写」；③ 失败输出按百分比**升序**
+  并带缺失行号区间，日志里一眼看到最差的文件和该补哪几行；④ 强制 UTF-8 stdout
+  （`_force_utf8_stdio()`），否则 Windows GBK 控制台下打 `↔` 会直接 `UnicodeEncodeError`。
+- **`pyproject.toml` 新增 `[tool.coverage.perfile]`**：`fail_under = 60`、
+  `min_statements = 10`、`exclude = []`。**刻意留空 `exclude`**——
+  空清单是可验证状态，而一条随手写的排除会让这张清单慢慢变成静音名单。
+- **CI `test` job 新增独立一步「per-file 覆盖率门禁（拦单点失守）」**，
+  `if: always()`、**阻塞**（不是 `continue-on-error`）。独立成步的另一个好处是
+  失败信息独立成段，日志里直接看到哪个文件、缺哪些行。
+- **补上四处真缺口**（覆盖率 76.88% → 91.16% ~ 91.27%，新增 136 条用例）：
+
+  | 文件 | 覆盖 | 新增测试 | 补的是什么 |
+  | --- | --- | --- | --- |
+  | `agenttest/runner.py` | **0% → 92.5%** | `tests/test_runner_cli.py`（27 条） | `parse_args` 的每个 flag 与非法值、`pick_brain` 三种分支、`wait_for_health` 的超时与重试、`DemoServer` 生命周期、`main()` 的 0/1 两条退出路径 |
+  | `agenttest/config.py` | **39% → 97.4%** | `tests/test_config.py`（40 条） | 三层优先级（环境变量 > 档案 > 代码默认）逐层验证、dotenv 不覆盖已有变量、非法环境名报错、`llm_configured` 真假两态、`_find_chrome` 路径有效性 |
+  | `agenttest/tools/ui_tool.py` | **78% → 99.2%** | `tests/test_ui_tool_errors.py`（31 条） | 不依赖浏览器：chrome 非零退出/空输出、无 Chrome 时抛 `UiUnavailableError`、**未实现的断言类型必须判失败**（两个后端各测）、selenium 异常时 driver 仍 quit |
+  | `agenttest/tools/spec_tool.py` | **32% → 100%** | `tests/test_spec_tool.py`（13 条） | 契约解析异常分支：缺 `paths`、非法 JSON、非 dict 响应 |
+  | `scripts/check_coverage.py` | 100% | `tests/test_check_coverage_script.py`（25 条） | 门禁脚本自身的测试：配置缺失要退 1、排除路径写错要报错、失败按百分比升序、JSON 里改低 1pp 必须被抓到 |
+- 顺带修掉一处真实缺陷：`DemoServer.__init__` 里 `int(url.rsplit(":", 1)[-1])` 在
+  `--demo-url` 不带端口时抛裸 `ValueError: invalid literal for int()`，
+  看不出是哪个参数错了。改成能照着改的报错（说清要什么、收到了什么、解析出的端口部分是什么），
+  由 `tests/test_runner_cli.py` 钉住。
+
+### 设计取舍（本轮新增）
+
+- **门槛是棘轮，不是目标。** 首轮取 30，只抓 `runner.py` 一个文件、跑出那条可解释的红
+  （`runner.py 0.0% 122 语句；缺失 10, 12-18, 20-21, …共 26 段`），留证后再修；
+  补完四处缺口后参与判定的 16 个文件最低是 `demo_app/rag.py` 81.1%，
+  于是抬到 **60**。以后每清完一轮再抬，每轮只抬一次。
+- **为什么不一次抬到 75**：离 `rag.py` 只剩 6pp，随便加一个分支就红。
+  一个经常无故变红的门禁，最后一定会被 `continue-on-error` 绕过 —— 那比没有门禁更坏。
+  **本仓有前例**：`ruff format` 曾经长期挂着 COE，后来才被清干净改成阻塞项。
+- **为什么不追 `llm_brain.py` 剩下的 15.7%**：那几行是真实联网调用与结构化解析，
+  需要真 API key。它属于「链路通不通」的验证，不属于 PR 门禁，留给手动触发的
+  `pytest -m llm` 冒烟（见下一条待办）。
+- **仓库级 70 为什么没往上抬**：补完测试后总量 91%，70 的余量已经 21pp，
+  它现在只剩「拦住大面积同时失守」这一个作用；提高它不会增加单点保护能力，
+  单点保护交给 per-file 门禁。两个门禁分工明确，不是一个顶替另一个。
+
+### 待办（需要真实 LLM Key，等提供后执行）
+
+- `tests/test_llm_smoke.py`：`pytest.mark.llm` + 无 key 自动 skip，
+  断言**结构契约**而非结果好坏（流程返回 0 且 `report.json` 存在、
+  `defects[].kind` 落在六类内、`related_case_ids` 全来自真实白名单、不出现降级标记）。
+- `.github/workflows/llm-smoke.yml`：`workflow_dispatch` 手动触发，**不进 PR 门禁**
+  （贵 / 慢且不确定 / 它验证的是「链路在真实 provider 上还通不通」而不是
+  「这次改动有没有错」）。
+
 ### 新增
 
 - **容器化**：`Dockerfile`（`python:3.12-slim`，`ARG INSTALL_DEV` 区分运行/测试两批依赖，
