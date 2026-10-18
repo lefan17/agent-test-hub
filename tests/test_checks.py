@@ -5,6 +5,7 @@
 - API 用例不能只看状态码，`case.checks` 非空时必须校验响应体；
 - 重试退避必须是指数而非线性（文档宣称指数退避）。
 """
+
 from __future__ import annotations
 
 import sys
@@ -23,16 +24,30 @@ RAG_CHECK_TYPES = [t for t in ALL_CHECK_TYPES if t.startswith("rag_")]
 
 
 def _rag_case(expected_status: int = 200) -> TestCase:
-    return TestCase(id="RAG-T", title="t", kind="rag", rag_query="vector database",
-                    rag_relevant=["DOC-EN-001"], expected_status=expected_status)
+    return TestCase(
+        id="RAG-T",
+        title="t",
+        kind="rag",
+        rag_query="vector database",
+        rag_relevant=["DOC-EN-001"],
+        expected_status=expected_status,
+    )
 
 
 def _api_case(expected_status: int, checks) -> TestCase:
-    return TestCase(id="API-T", title="t", kind="api", method="GET", path="/api/health",
-                    expected_status=expected_status, checks=checks)
+    return TestCase(
+        id="API-T",
+        title="t",
+        kind="api",
+        method="GET",
+        path="/api/health",
+        expected_status=expected_status,
+        checks=checks,
+    )
 
 
 # ---------- RAG 断言分派 ----------
+
 
 def test_rag_status_check_compares_status_code():
     case = _rag_case(expected_status=200)
@@ -45,8 +60,7 @@ def test_rag_status_check_compares_status_code():
 
 def test_unimplemented_rag_check_type_fails():
     """Literal 之外的 check.type 走不到 Pydantic 校验时也必须判失败，不能静默通过。"""
-    unknown = Check.model_construct(type="rag_not_implemented_yet", target="", doc_ids=[],
-                                    threshold=0.0)
+    unknown = Check.model_construct(type="rag_not_implemented_yet", target="", doc_ids=[], threshold=0.0)
     verdict = nodes._eval_rag_check(unknown, [], _rag_case(), 200)
     assert verdict["ok"] is False
     assert "未实现" in verdict["detail"]
@@ -60,8 +74,7 @@ def test_rag_metric_checks_fail_when_case_has_no_labels():
     0.0」这种自相矛盾的 detail 通过。LLMBrain 生成的用例正好可能漏标注：prompt 只说
     「related 标注文档用 rag_relevant」，没有强制要求填。
     """
-    unlabeled = TestCase(id="RAG-NOLABEL", title="t", kind="rag", rag_query="vector database",
-                         top_k=5, rag_relevant=[])
+    unlabeled = TestCase(id="RAG-NOLABEL", title="t", kind="rag", rag_query="vector database", top_k=5, rag_relevant=[])
     hits = [{"doc_id": "DOC-EN-001", "score": 1.0, "rank": 1}]
     for check_type in ("rag_recall_at_least", "rag_mrr_at_least"):
         verdict = nodes._eval_rag_check(Check(type=check_type), hits, unlabeled, 200)
@@ -85,8 +98,7 @@ def test_rag_detail_text_agrees_with_the_verdict():
     case = _rag_case()
     hits = [{"doc_id": "DOC-EN-001", "score": 1.0, "rank": 1}]
 
-    included = nodes._eval_rag_check(
-        Check(type="rag_hits_include", doc_ids=["DOC-EN-001"]), hits, case, 200)
+    included = nodes._eval_rag_check(Check(type="rag_hits_include", doc_ids=["DOC-EN-001"]), hits, case, 200)
     assert included["ok"] is True
     assert "命中包含" in included["detail"] and "缺少" not in included["detail"]
 
@@ -137,8 +149,7 @@ def test_ui_check_unknown_check_type_fails(monkeypatch):
     """
     ui_tool = _chrome_backend(monkeypatch)
     unknown = Check.model_construct(type="rag_no_duplicate", target="", doc_ids=[], threshold=0.0)
-    detail = ui_tool.ui_check("http://127.0.0.1:1/", [unknown], backend="chrome",
-                              chrome_path=sys.executable)
+    detail = ui_tool.ui_check("http://127.0.0.1:1/", [unknown], backend="chrome", chrome_path=sys.executable)
     assert detail["ok"] is False
     assert len(detail["results"]) == 1
     assert detail["results"][0]["ok"] is False
@@ -148,11 +159,12 @@ def test_ui_check_unknown_check_type_fails(monkeypatch):
 def test_ui_check_known_types_still_pass(monkeypatch):
     """回归：已实现的三种类型行为不变，不因新增 else 分支而误判。"""
     ui_tool = _chrome_backend(monkeypatch)
-    checks = [Check(type="contains_text", target="AgentTest Demo"),
-              Check(type="title_contains", target="AgentTest"),
-              Check(type="has_element", target="h1")]
-    detail = ui_tool.ui_check("http://127.0.0.1:1/", checks, backend="chrome",
-                              chrome_path=sys.executable)
+    checks = [
+        Check(type="contains_text", target="AgentTest Demo"),
+        Check(type="title_contains", target="AgentTest"),
+        Check(type="has_element", target="h1"),
+    ]
+    detail = ui_tool.ui_check("http://127.0.0.1:1/", checks, backend="chrome", chrome_path=sys.executable)
     assert detail["ok"] is True
     assert [r["ok"] for r in detail["results"]] == [True, True, True]
 
@@ -160,11 +172,16 @@ def test_ui_check_known_types_still_pass(monkeypatch):
 def test_ui_case_with_unknown_check_type_is_not_ok(monkeypatch, tmp_path):
     """端到端一层：executor 的 _run_ui_case 必须把该用例判失败。"""
     _chrome_backend(monkeypatch)
-    case = TestCase(id="UI-T", title="t", kind="ui", url="/",
-                    checks=[Check.model_construct(type="rag_no_duplicate", target="",
-                                                  doc_ids=[], threshold=0.0)])
-    detail = nodes._run_ui_case(case, "http://127.0.0.1:1", tmp_path,
-                                Config(ui_backend="chrome", chrome_path=sys.executable))
+    case = TestCase(
+        id="UI-T",
+        title="t",
+        kind="ui",
+        url="/",
+        checks=[Check.model_construct(type="rag_no_duplicate", target="", doc_ids=[], threshold=0.0)],
+    )
+    detail = nodes._run_ui_case(
+        case, "http://127.0.0.1:1", tmp_path, Config(ui_backend="chrome", chrome_path=sys.executable)
+    )
     assert detail["ok"] is False
     assert "未实现" in detail["error"]
 
@@ -224,12 +241,12 @@ def test_selenium_backend_unknown_check_type_fails(monkeypatch):
     assert detail["ok"] is False
     assert "未实现" in detail["results"][0]["detail"]
     # 回归：已实现类型不受影响
-    ok_detail = ui_tool._selenium_check("http://127.0.0.1:1/",
-                                       [Check(type="contains_text", target="hello")], None)
+    ok_detail = ui_tool._selenium_check("http://127.0.0.1:1/", [Check(type="contains_text", target="hello")], None)
     assert ok_detail["ok"] is True
 
 
 # ---------- API 用例双断言 ----------
+
 
 def test_api_case_fails_when_body_lacks_expected_text(demo_server_url):
     case = _api_case(200, [Check(type="contains_text", target="THIS-TEXT-IS-NOT-IN-BODY")])
@@ -273,15 +290,27 @@ def test_api_case_with_unknown_check_type_is_not_ok(demo_server_url):
 
 # ---------- 重试退避 ----------
 
+
 def test_retry_backoff_is_exponential(monkeypatch):
     sleeps: list = []
     monkeypatch.setattr(nodes.time, "sleep", lambda seconds: sleeps.append(seconds))
-    monkeypatch.setattr(nodes, "_run_api_case",
-                        lambda case, base_url: {"ok": False, "status": 503, "actual": "503",
-                                                "error": "服务不可用", "evidence": "", "notes": []})
+    monkeypatch.setattr(
+        nodes,
+        "_run_api_case",
+        lambda case, base_url: {
+            "ok": False,
+            "status": 503,
+            "actual": "503",
+            "error": "服务不可用",
+            "evidence": "",
+            "notes": [],
+        },
+    )
     cfg = Config(max_attempts=3)
-    state = {"cases": [_api_case(200, [])],
-             "context": {"base_url": "http://127.0.0.1:1", "report_dir": ".", "max_attempts": 3}}
+    state = {
+        "cases": [_api_case(200, [])],
+        "context": {"base_url": "http://127.0.0.1:1", "report_dir": ".", "max_attempts": 3},
+    }
     result = nodes.make_executor(cfg)(state)["results"][0]
 
     assert result.attempts == 3
@@ -292,19 +321,30 @@ def test_retry_backoff_is_exponential(monkeypatch):
 def test_single_attempt_never_sleeps(monkeypatch):
     sleeps: list = []
     monkeypatch.setattr(nodes.time, "sleep", lambda seconds: sleeps.append(seconds))
-    monkeypatch.setattr(nodes, "_run_api_case",
-                        lambda case, base_url: {"ok": False, "status": 400, "actual": "400",
-                                                "error": "契约不符", "evidence": "", "notes": []})
+    monkeypatch.setattr(
+        nodes,
+        "_run_api_case",
+        lambda case, base_url: {
+            "ok": False,
+            "status": 400,
+            "actual": "400",
+            "error": "契约不符",
+            "evidence": "",
+            "notes": [],
+        },
+    )
     cfg = Config(max_attempts=3)
-    state = {"cases": [_api_case(200, [])],
-             "context": {"base_url": "http://127.0.0.1:1", "report_dir": ".", "max_attempts": 3}}
+    state = {
+        "cases": [_api_case(200, [])],
+        "context": {"base_url": "http://127.0.0.1:1", "report_dir": ".", "max_attempts": 3},
+    }
     result = nodes.make_executor(cfg)(state)["results"][0]
 
     assert result.attempts == 1 and result.retried is False
     assert sleeps == []  # 4xx 不可重试
 
 
-# ---------- 并发---------- 
+# ---------- 并发----------
 def test_lock_serializes_writes_against_reads():
     """写路径确实走同一把可重入锁：主线程持锁时写线程必须被挡住。"""
     from demo_app.rag import CORRECT_BUGS, RagService
@@ -315,8 +355,9 @@ def test_lock_serializes_writes_against_reads():
     done = threading.Event()
     service._lock.acquire()
     try:
-        worker = threading.Thread(target=lambda: (service.add_doc("DOC-LOCK-TMP", "locked write"),
-                                                  done.set()), daemon=True)
+        worker = threading.Thread(
+            target=lambda: (service.add_doc("DOC-LOCK-TMP", "locked write"), done.set()), daemon=True
+        )
         worker.start()
         assert done.wait(0.2) is False, "写路径没有走锁，会在检索迭代中改字典"
     finally:

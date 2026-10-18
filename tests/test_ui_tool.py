@@ -1,4 +1,5 @@
 """UI 工具测试（真实浏览器渲染，无 Chrome 时自动跳过）。"""
+
 from __future__ import annotations
 
 import pytest

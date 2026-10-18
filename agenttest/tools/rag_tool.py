@@ -7,6 +7,7 @@
 时才给出结论，且结论写在独立的 `quality` / `quality_ok` 键里——`ok` 的语义不变，
 既有调用方读到的行为不变。
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
@@ -25,8 +26,14 @@ REINDEX_PATH = "/api/rag/reindex"
 DOCS_PATH = "/api/rag/docs"
 
 
-def _call(method: str, base_url: str, path: str, query: Optional[Dict[str, str]] = None,
-          body: Optional[Dict[str, Any]] = None, timeout: float = 10.0) -> Dict[str, Any]:
+def _call(
+    method: str,
+    base_url: str,
+    path: str,
+    query: Optional[Dict[str, str]] = None,
+    body: Optional[Dict[str, Any]] = None,
+    timeout: float = 10.0,
+) -> Dict[str, Any]:
     detail = api_request(method, path, query=query, body=body, base_url=base_url, timeout=timeout)
     return {
         "ok": bool(detail.get("ok")),
@@ -38,8 +45,9 @@ def _call(method: str, base_url: str, path: str, query: Optional[Dict[str, str]]
     }
 
 
-def rag_search(base_url: str, query: Optional[str] = None, top_k: Optional[Any] = None,
-               timeout: float = 10.0) -> Dict[str, Any]:
+def rag_search(
+    base_url: str, query: Optional[str] = None, top_k: Optional[Any] = None, timeout: float = 10.0
+) -> Dict[str, Any]:
     """GET /api/rag/search?q=&top_k= —— 一次检索调用。"""
     params: Dict[str, str] = {}
     if query is not None:
@@ -86,9 +94,14 @@ def doc_ids_in_index(index_detail: Dict[str, Any]) -> List[str]:
     return [str(doc_id) for doc_id in (body.get("doc_ids") or [])]
 
 
-def rag_evaluate(base_url: str, queries: Sequence[Dict[str, Any]], top_k: int = 5,
-                 timeout: float = 10.0, min_recall: Optional[float] = None,
-                 min_mrr: Optional[float] = None) -> Dict[str, Any]:
+def rag_evaluate(
+    base_url: str,
+    queries: Sequence[Dict[str, Any]],
+    top_k: int = 5,
+    timeout: float = 10.0,
+    min_recall: Optional[float] = None,
+    min_mrr: Optional[float] = None,
+) -> Dict[str, Any]:
     """跑一组 (query, 标注相关文档) 并计算 recall@k / MRR。
 
     指标本身由 rag_metrics 的纯函数计算，这里只负责取数。
@@ -108,21 +121,28 @@ def rag_evaluate(base_url: str, queries: Sequence[Dict[str, Any]], top_k: int = 
         results.append({"q": query, "relevant": relevant, "hits": detail["hits"]})
     report = build_report(results, int(top_k))
     ok = bool(statuses) and all(200 <= status < 300 for status in statuses)
-    report.update({
-        "ok": ok,
-        "status": statuses[0] if statuses else 0,
-        "statuses": statuses,
-        "error": "" if ok else f"检索请求状态异常: {statuses}",
-    })
+    report.update(
+        {
+            "ok": ok,
+            "status": statuses[0] if statuses else 0,
+            "statuses": statuses,
+            "error": "" if ok else f"检索请求状态异常: {statuses}",
+        }
+    )
     if min_recall is not None or min_mrr is not None:
         report["quality"] = judge_quality(report, min_recall=min_recall, min_mrr=min_mrr)
         report["quality_ok"] = report["quality"]["ok"]
     return report
 
 
-def rag_consistency_probe(base_url: str, doc_id: str = RAG_PROBE_DOC_ID, text: str = RAG_PROBE_TEXT,
-                          query: str = RAG_PROBE_QUERY, top_k: int = 5,
-                          timeout: float = 10.0) -> Dict[str, Any]:
+def rag_consistency_probe(
+    base_url: str,
+    doc_id: str = RAG_PROBE_DOC_ID,
+    text: str = RAG_PROBE_TEXT,
+    query: str = RAG_PROBE_QUERY,
+    top_k: int = 5,
+    timeout: float = 10.0,
+) -> Dict[str, Any]:
     """索引一致性探针：新增临时文档 → 确认可召回 → 删除 → 再检索，看是否仍被召回。
 
     流程（全程自清理，跑完调用 reindex 让被测系统回到语料/索引一致状态，避免污染其他用例）：
@@ -140,7 +160,7 @@ def rag_consistency_probe(base_url: str, doc_id: str = RAG_PROBE_DOC_ID, text: s
     `ok` 仅表示探针流程本身跑通（各步骤都有 HTTP 响应），不做业务断言。
     """
     index_before = rag_index(base_url, timeout=timeout)
-    rag_delete_doc(base_url, doc_id, timeout=timeout)          # 幂等清理
+    rag_delete_doc(base_url, doc_id, timeout=timeout)  # 幂等清理
     add = rag_add_doc(base_url, doc_id, text, timeout=timeout)
     hits_before = rag_search(base_url, query, top_k, timeout=timeout)
     index_mid = rag_index(base_url, timeout=timeout)
@@ -160,8 +180,12 @@ def rag_consistency_probe(base_url: str, doc_id: str = RAG_PROBE_DOC_ID, text: s
         "corpus_doc_ids_before": doc_ids_in_index(index_before),
         "corpus_doc_ids_mid": doc_ids_in_index(index_mid),
         "corpus_doc_ids_after_delete": corpus_ids_after,
-        "corpus_size_after_delete": (index_after["body"] or {}).get("size") if isinstance(index_after["body"], dict) else None,
-        "index_size_after_delete": (index_after["body"] or {}).get("index_size") if isinstance(index_after["body"], dict) else None,
+        "corpus_size_after_delete": (index_after["body"] or {}).get("size")
+        if isinstance(index_after["body"], dict)
+        else None,
+        "index_size_after_delete": (index_after["body"] or {}).get("index_size")
+        if isinstance(index_after["body"], dict)
+        else None,
         "index_size_mid": (index_mid["body"] or {}).get("index_size") if isinstance(index_mid["body"], dict) else None,
         "hits_before_delete": hits_before["hits"],
         "hits_after_delete": hits_after["hits"],

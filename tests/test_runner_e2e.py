@@ -1,4 +1,5 @@
 """端到端：MockBrain + LangGraph 全流程，必须发现注入缺陷并产出报告。"""
+
 from __future__ import annotations
 
 import json
@@ -45,8 +46,8 @@ def test_e2e_mock_brain_finds_bugs(demo_server_url, tmp_path):
     assert data["summary"]["failed"] >= 2
 
     categories = {d["category"] for d in data["defects"]}
-    assert "contract" in categories   # BUG-API-001
-    assert "bug" in categories        # BUG-API-002
+    assert "contract" in categories  # BUG-API-001
+    assert "bug" in categories  # BUG-API-002
 
     html = Path(final["report"]["html"]).read_text(encoding="utf-8")
     assert "Agent 自动测试报告" in html

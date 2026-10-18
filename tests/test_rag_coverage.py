@@ -12,6 +12,7 @@ POST /api/rag/docs、DELETE /api/rag/docs/{doc_id} 「没有任何用例覆盖�
 去重成集合，与声明表逐字比对。谁给 rag_tool 加了端点调用而没同步声明表，
 这条测试就变红。
 """
+
 from __future__ import annotations
 
 import pytest
@@ -49,8 +50,7 @@ def _record_endpoints(monkeypatch) -> list:
 
 def _observed(calls) -> set:
     """把探针文档 id 归一化掉，得到「端点模板」集合。"""
-    return {(method, path.replace(rag_tool.RAG_PROBE_DOC_ID, PROBE_DOC_PLACEHOLDER))
-            for method, path in calls}
+    return {(method, path.replace(rag_tool.RAG_PROBE_DOC_ID, PROBE_DOC_PLACEHOLDER)) for method, path in calls}
 
 
 def test_coverage_declaration_matches_endpoints_actually_called(demo_server_url, monkeypatch):
@@ -70,10 +70,12 @@ def test_coverage_declaration_matches_endpoints_actually_called(demo_server_url,
 
     assert observed_normal == declared_normal, (
         f"普通检索用例的实际调用 {sorted(observed_normal)} "
-        f"与声明 {sorted(declared_normal)} 不一致——声明表跟不上 rag_tool 了")
+        f"与声明 {sorted(declared_normal)} 不一致——声明表跟不上 rag_tool 了"
+    )
     assert observed_probe == declared_probe, (
         f"一致性探针的实际调用 {sorted(observed_probe)} "
-        f"与声明 {sorted(declared_probe)} 不一致——声明表跟不上 rag_tool 了")
+        f"与声明 {sorted(declared_probe)} 不一致——声明表跟不上 rag_tool 了"
+    )
 
 
 def test_consistency_probe_case_really_calls_all_five_endpoints(demo_server_url):

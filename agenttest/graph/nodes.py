@@ -5,6 +5,7 @@
 - critic：调用 Brain 归因失败，产出缺陷与覆盖率
 - reporter：落盘 JSON + HTML 报告
 """
+
 from __future__ import annotations
 
 import json
@@ -45,6 +46,7 @@ def make_planner(brain: BaseBrain, cfg: Config):
         if reason:
             trace.insert(0, f"[planner] LLM 规划失败，已降级规则引擎：{reason}")
         return {"cases": cases, "trace": trace}
+
     return planner
 
 
@@ -92,10 +94,14 @@ def make_executor(cfg: Config):
                 metrics=last_detail.get("metrics", {}),
             )
             results.append(result)
-            trace.append(f"[executor] {'PASS' if ok else 'FAIL'} {case.id} {case.title} "
-                         f"(期望 {result.expected} / 实际 {actual} / {duration_ms}ms"
-                         + (f" / 重试{attempts-1}次" if retried else "") + ")")
+            trace.append(
+                f"[executor] {'PASS' if ok else 'FAIL'} {case.id} {case.title} "
+                f"(期望 {result.expected} / 实际 {actual} / {duration_ms}ms"
+                + (f" / 重试{attempts - 1}次" if retried else "")
+                + ")"
+            )
         return {"results": results, "trace": trace}
+
     return executor
 
 
@@ -138,8 +144,9 @@ def _run_api_case(case: TestCase, base_url: str) -> Dict[str, Any]:
     状态码不符即失败；`case.checks` 非空时还要逐条校验响应体关键字段
     （contains_text / title_contains / has_element），避免「状态码对了就算过」的假绿。
     """
-    detail = api_request(case.method, case.path, query=case.query, body=case.body,
-                         headers=case.headers, base_url=base_url)
+    detail = api_request(
+        case.method, case.path, query=case.query, body=case.body, headers=case.headers, base_url=base_url
+    )
     actual = detail.get("status", 0)
     ok = bool(detail.get("ok")) and actual == case.expected_status
     failures: List[str] = []
@@ -231,23 +238,28 @@ def _run_rag_case(case: TestCase, base_url: str) -> Dict[str, Any]:
     return {
         "ok": ok,
         "status": status,
-        "actual": (f"{status} hits={hit_ids[:case.top_k]} "
-                   f"recall@{case.top_k}={metrics['recall_at_k']:.4f} MRR={metrics['mrr']:.4f}"),
+        "actual": (
+            f"{status} hits={hit_ids[: case.top_k]} "
+            f"recall@{case.top_k}={metrics['recall_at_k']:.4f} MRR={metrics['mrr']:.4f}"
+        ),
         "error": "" if ok else "；".join(failures),
-        "evidence": (f"请求 GET /api/rag/search?q={case.rag_query}&top_k={case.top_k} -> {status}；"
-                     f"hits={[(h.get('doc_id'), h.get('score'), h.get('rank')) for h in hits]}；"
-                     f"index={index_info}；recall@{case.top_k}={metrics['recall_at_k']:.6f}；"
-                     f"MRR={metrics['mrr']:.6f}"),
-        "notes": [f"期望: {expected_label}",
-                  f"检索质量指标 recall@{case.top_k}={metrics['recall_at_k']:.6f}，MRR={metrics['mrr']:.6f}",
-                  f"索引 backend={index_info.get('backend')} size={index_info.get('size')} "
-                  f"version={index_info.get('version')}"],
+        "evidence": (
+            f"请求 GET /api/rag/search?q={case.rag_query}&top_k={case.top_k} -> {status}；"
+            f"hits={[(h.get('doc_id'), h.get('score'), h.get('rank')) for h in hits]}；"
+            f"index={index_info}；recall@{case.top_k}={metrics['recall_at_k']:.6f}；"
+            f"MRR={metrics['mrr']:.6f}"
+        ),
+        "notes": [
+            f"期望: {expected_label}",
+            f"检索质量指标 recall@{case.top_k}={metrics['recall_at_k']:.6f}，MRR={metrics['mrr']:.6f}",
+            f"索引 backend={index_info.get('backend')} size={index_info.get('size')} "
+            f"version={index_info.get('version')}",
+        ],
         "metrics": metrics,
     }
 
 
-def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase,
-                    status: int = 0) -> Dict[str, Any]:
+def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase, status: int = 0) -> Dict[str, Any]:
     """求值一条 RAG 断言。
 
     未实现的 check.type **必须判失败**：旧实现在末尾兜底返回 ok=True，任何漏写分支的
@@ -256,9 +268,10 @@ def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase,
     if check.type == "rag_hits_include":
         wanted = list(check.doc_ids or ([check.target] if check.target else []))
         if not wanted:
-            return {"ok": False,
-                    "detail": "用例没有声明要命中的 doc_id（doc_ids 与 target 都为空），"
-                              "无法判定——声明缺失按失败处理"}
+            return {
+                "ok": False,
+                "detail": "用例没有声明要命中的 doc_id（doc_ids 与 target 都为空），无法判定——声明缺失按失败处理",
+            }
         got = {str(h.get("doc_id")) for h in hits}
         missing = [doc_id for doc_id in wanted if doc_id not in got]
         if missing:
@@ -273,35 +286,36 @@ def _eval_rag_check(check: Check, hits: List[Dict[str, Any]], case: TestCase,
         return {"ok": not dups, "detail": f"hits 中重复出现的 doc_id: {dups}"}
     if check.type == "rag_recall_at_least":
         if not case.rag_relevant:
-            return {"ok": False,
-                    "detail": "用例没有标注相关文档（rag_relevant 为空），recall 无定义——"
-                              "标注缺失按失败处理，不按「无可漏项」记满分"}
+            return {
+                "ok": False,
+                "detail": "用例没有标注相关文档（rag_relevant 为空），recall 无定义——"
+                "标注缺失按失败处理，不按「无可漏项」记满分",
+            }
         value = recall_at_k(hits, case.rag_relevant, case.top_k)
         if value + 1e-12 >= check.threshold:
             return {"ok": True, "detail": f"recall@{case.top_k}={value:.6f} >= 阈值 {check.threshold}"}
-        return {"ok": False,
-                "detail": f"recall@{case.top_k}={value:.6f} < 阈值 {check.threshold}"}
+        return {"ok": False, "detail": f"recall@{case.top_k}={value:.6f} < 阈值 {check.threshold}"}
     if check.type == "rag_mrr_at_least":
         if not case.rag_relevant:
-            return {"ok": False,
-                    "detail": "用例没有标注相关文档（rag_relevant 为空），MRR 无定义——"
-                              "标注缺失按失败处理，不按「无可漏项」记满分"}
+            return {
+                "ok": False,
+                "detail": "用例没有标注相关文档（rag_relevant 为空），MRR 无定义——"
+                "标注缺失按失败处理，不按「无可漏项」记满分",
+            }
         value = reciprocal_rank(hits, case.rag_relevant)
         if value + 1e-12 >= check.threshold:
             return {"ok": True, "detail": f"MRR={value:.6f} >= 阈值 {check.threshold}"}
         return {"ok": False, "detail": f"MRR={value:.6f} < 阈值 {check.threshold}"}
     if check.type == "rag_status":
         expected = int(check.threshold) if check.threshold else case.expected_status
-        return {"ok": int(status) == expected,
-                "detail": f"状态码期望 {expected}，实际 {status}"}
+        return {"ok": int(status) == expected, "detail": f"状态码期望 {expected}，实际 {status}"}
     return {"ok": False, "detail": f"未实现的断言类型 {check.type}（executor 未支持，按失败处理）"}
 
 
 def _run_rag_consistency_case(case: TestCase, base_url: str) -> Dict[str, Any]:
     probe = rag_consistency_probe(base_url)
     corpus_ids = set(probe["corpus_doc_ids_after_delete"])
-    ghost_hits = [h for h in probe["hits_after_delete"]
-                  if str(h.get("doc_id")) not in corpus_ids]
+    ghost_hits = [h for h in probe["hits_after_delete"] if str(h.get("doc_id")) not in corpus_ids]
     ghost_ids = [str(h.get("doc_id")) for h in ghost_hits]
     indexed_after = probe.get("index_size_after_delete")
     corpus_after = probe.get("corpus_size_after_delete")
@@ -312,24 +326,32 @@ def _run_rag_consistency_case(case: TestCase, base_url: str) -> Dict[str, Any]:
         failures.append(f"删除后仍被召回（陈旧索引 ghost hit）: {ghost_ids}")
     if indexed_after is not None and corpus_after is not None and indexed_after != corpus_after:
         failures.append(f"index_size={indexed_after} != corpus size={corpus_after}（索引未与语料同步）")
-    metrics = {"ghost_hit_count": float(len(ghost_ids)),
-               "index_size_after_delete": float(indexed_after or 0),
-               "corpus_size_after_delete": float(corpus_after or 0)}
+    metrics = {
+        "ghost_hit_count": float(len(ghost_ids)),
+        "index_size_after_delete": float(indexed_after or 0),
+        "corpus_size_after_delete": float(corpus_after or 0),
+    }
     ok = not failures
     return {
         "ok": ok,
         "status": probe["status"],
-        "actual": (f"删除后检索 hits={[h.get('doc_id') for h in probe['hits_after_delete']]}，"
-                   f"ghost={ghost_ids}，index_size={indexed_after}/corpus_size={corpus_after}"),
+        "actual": (
+            f"删除后检索 hits={[h.get('doc_id') for h in probe['hits_after_delete']]}，"
+            f"ghost={ghost_ids}，index_size={indexed_after}/corpus_size={corpus_after}"
+        ),
         "error": "" if ok else "；".join(failures),
-        "evidence": (f"一致性探针：新增 {probe['probe_doc_id']}（{probe['add_status']}）→ "
-                     f"删除前命中 {[h.get('doc_id') for h in probe['hits_before_delete']]} → "
-                     f"删除后语料 {probe['corpus_doc_ids_after_delete']}，再检索命中 "
-                     f"{[h.get('doc_id') for h in probe['hits_after_delete']]}；"
-                     f"reindex -> version {probe['reindex_version']}"),
-        "notes": [f"ghost hit 数={len(ghost_ids)}",
-                  f"index_size={indexed_after}，语料 size={corpus_after}",
-                  f"reindex 后 version={probe['reindex_version']}"],
+        "evidence": (
+            f"一致性探针：新增 {probe['probe_doc_id']}（{probe['add_status']}）→ "
+            f"删除前命中 {[h.get('doc_id') for h in probe['hits_before_delete']]} → "
+            f"删除后语料 {probe['corpus_doc_ids_after_delete']}，再检索命中 "
+            f"{[h.get('doc_id') for h in probe['hits_after_delete']]}；"
+            f"reindex -> version {probe['reindex_version']}"
+        ),
+        "notes": [
+            f"ghost hit 数={len(ghost_ids)}",
+            f"index_size={indexed_after}，语料 size={corpus_after}",
+            f"reindex 后 version={probe['reindex_version']}",
+        ],
         "metrics": metrics,
     }
 
@@ -339,7 +361,8 @@ def _run_ui_case(case: TestCase, base_url: str, report_dir, cfg: Config) -> Dict
     try:
         shot_path = report_dir / f"screenshot_{case.id}.png"
         detail = ui_check(
-            url, case.checks,
+            url,
+            case.checks,
             backend=cfg.effective_ui_backend,
             chrome_path=cfg.chrome_path,
             screenshot_path=shot_path,
@@ -356,8 +379,14 @@ def _run_ui_case(case: TestCase, base_url: str, report_dir, cfg: Config) -> Dict
             "notes": [f"后端: {cfg.effective_ui_backend}", f"截图: {detail.get('screenshot') or '无'}"],
         }
     except UiUnavailableError as exc:
-        return {"ok": False, "status": 0, "actual": "UI 不可用",
-                "error": str(exc), "evidence": "", "notes": ["UI 后端不可用，该用例失败"]}
+        return {
+            "ok": False,
+            "status": 0,
+            "actual": "UI 不可用",
+            "error": str(exc),
+            "evidence": "",
+            "notes": ["UI 后端不可用，该用例失败"],
+        }
 
 
 # RAG 用例的覆盖端点声明：一条 RAG 用例可能依次打多个端点，coverage 必须把它们都列出来。
@@ -413,13 +442,13 @@ def make_critic(brain: BaseBrain):
         for case in state["cases"]:
             for key in _coverage_keys(case):
                 coverage.setdefault(key, []).append(case.id)
-        trace = [f"[critic] 失败 {sum(1 for r in results if not r.ok)}/{len(results)}，"
-                 f"归因出 {len(defects)} 个缺陷"]
+        trace = [f"[critic] 失败 {sum(1 for r in results if not r.ok)}/{len(results)}，归因出 {len(defects)} 个缺陷"]
         if reason:
             trace.append(f"[critic] LLM 归因失败，已降级规则引擎：{reason}")
         for d in defects:
             trace.append(f"[critic]   {d.id} [{d.severity}/{d.category}] {d.title} @ {d.endpoint}")
         return {"defects": defects, "coverage": coverage, "trace": trace}
+
     return critic
 
 
@@ -457,4 +486,5 @@ def make_reporter(brain: BaseBrain, cfg: Config):
         files = {"json": str(json_path), "html": str(html_path)}
         trace = [f"[reporter] 报告已生成: {html_path.name}（JSON: {json_path.name}）"]
         return {"report": files, "trace": trace}
+
     return reporter

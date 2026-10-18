@@ -16,6 +16,7 @@
 
 契约以 demo_app/openapi.json 为准：实现与契约的偏差就是 Agent 要发现的缺陷。
 """
+
 from __future__ import annotations
 
 import math
@@ -92,7 +93,7 @@ def tokenize(text: str, buggy_cjk: bool = False) -> List[str]:
             continue
         tokens.extend(low)
         if len(low) > 1:
-            tokens.extend(low[i:i + 2] for i in range(len(low) - 1))
+            tokens.extend(low[i : i + 2] for i in range(len(low) - 1))
     return tokens
 
 
@@ -278,7 +279,7 @@ class RagService:
         self.backend: Any
         self.backend, self.fallback_reason = self._make_backend()
         self.corpus: Dict[str, str] = {}
-        for doc_id, text in (corpus if corpus is not None else DEFAULT_CORPUS):
+        for doc_id, text in corpus if corpus is not None else DEFAULT_CORPUS:
             self.corpus[doc_id] = text
         self.version = 1
         self.backend.build(self.corpus)
@@ -352,8 +353,7 @@ class RagService:
         with self._lock:  # 整个「打分 + 聚合排序」过程持锁，避免读到迭代中的半成品索引
             ranked = self._rank(self._contributions(query), top_k)
         return [
-            {"doc_id": doc_id, "score": round(float(score), 6), "rank": rank,
-             "text": self.corpus.get(doc_id, "")}
+            {"doc_id": doc_id, "score": round(float(score), 6), "rank": rank, "text": self.corpus.get(doc_id, "")}
             for rank, (doc_id, score) in enumerate(ranked, start=1)
         ]
 
@@ -379,7 +379,7 @@ class RagService:
             scored.sort(key=lambda item: item[1] if ascending else -item[1])
         else:
             scored.sort(key=lambda item: (item[1] if ascending else -item[1], item[0]))
-        return scored[:max(int(top_k), 0)]
+        return scored[: max(int(top_k), 0)]
 
     # ----- 语料增删改（BUG_RAG_STALE_INDEX 的注入点）-----
 

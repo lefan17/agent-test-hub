@@ -4,6 +4,7 @@
 - 「正确性」用例直接断言期望行为；当前实现不满足的，用 `strict=True` 的 xfail 标为缺陷基准；
 - 「缺陷复现」用例钉住当前实际行为，并在注释里说明它违反了哪条契约。
 """
+
 from __future__ import annotations
 
 import threading
@@ -30,6 +31,7 @@ def hits_of(client, query, top_k=5):
 
 # ---------- 语料与索引元信息 ----------
 
+
 def test_index_exposes_backend_size_and_version(client):
     body = client.get("/api/rag/index").get_json()
     assert body["backend"] == "bm25"
@@ -50,6 +52,7 @@ def test_corpus_contains_chinese_documents(client):
 
 
 # ---------- 语料 CRUD ----------
+
 
 def test_add_document_is_searchable_and_bumps_version(client):
     before = client.get("/api/rag/index").get_json()
@@ -101,8 +104,9 @@ def test_add_document_overwrite_clears_stale_postings():
     service.add_doc("DOC-OVER-001", "zzz unrelated brand new content only")
 
     for stale_query in ("vector", "database", "legacy"):
-        assert "DOC-OVER-001" not in [h["doc_id"] for h in service.search(stale_query, 5)], \
+        assert "DOC-OVER-001" not in [h["doc_id"] for h in service.search(stale_query, 5)], (
             f"覆盖写入后旧词 {stale_query!r} 仍在召回旧内容"
+        )
     assert "DOC-OVER-001" in [h["doc_id"] for h in service.search("zzz unrelated", 5)]
     assert service.index_size() == service.size()
 
@@ -112,12 +116,12 @@ def test_add_document_overwrite_does_not_inflate_score():
     service = RagService(bugs=CORRECT_BUGS)
     text = "retrieval quality benchmark document"
     service.add_doc("DOC-SCORE-001", text)
-    fresh = next(h["score"] for h in service.search("retrieval quality benchmark", 5)
-                 if h["doc_id"] == "DOC-SCORE-001")
+    fresh = next(h["score"] for h in service.search("retrieval quality benchmark", 5) if h["doc_id"] == "DOC-SCORE-001")
     for _ in range(3):
         service.add_doc("DOC-SCORE-001", text)
-    repeated = next(h["score"] for h in service.search("retrieval quality benchmark", 5)
-                    if h["doc_id"] == "DOC-SCORE-001")
+    repeated = next(
+        h["score"] for h in service.search("retrieval quality benchmark", 5) if h["doc_id"] == "DOC-SCORE-001"
+    )
     assert repeated == fresh, "覆盖写入累加了 tf，分数被虚高"
 
 
@@ -170,14 +174,14 @@ def test_concurrent_search_and_write_is_stable():
             index = 0
             while time.time() < deadline:
                 try:
-                    rag_add_doc(base_url, f"DOC-RACE-{index % 20:03d}",
-                                "vector database concurrent write probe")
+                    rag_add_doc(base_url, f"DOC-RACE-{index % 20:03d}", "vector database concurrent write probe")
                 except Exception as exc:  # pragma: no cover
                     errors.append(f"{type(exc).__name__}: {exc}")
                 index += 1
 
-        threads = [threading.Thread(target=reader) for _ in range(3)] + \
-                  [threading.Thread(target=writer) for _ in range(2)]
+        threads = [threading.Thread(target=reader) for _ in range(3)] + [
+            threading.Thread(target=writer) for _ in range(2)
+        ]
         for thread in threads:
             thread.start()
         for thread in threads:
@@ -190,6 +194,7 @@ def test_concurrent_search_and_write_is_stable():
 
 
 # ---------- reindex ----------
+
 
 def test_reindex_bumps_version_and_keeps_corpus(client):
     before = client.get("/api/rag/index").get_json()
@@ -204,15 +209,15 @@ def test_reindex_repairs_index_drift_after_delete(client):
     client.post("/api/rag/docs", json={"doc_id": "DOC-DRIFT-001", "text": "drift probe document alpha"})
     client.delete("/api/rag/docs/DOC-DRIFT-001")
     # 缺陷期：索引未随删除同步，index_size 大于语料 size
-    assert client.get("/api/rag/index").get_json()["index_size"] != \
-        client.get("/api/rag/index").get_json()["size"]
+    assert client.get("/api/rag/index").get_json()["index_size"] != client.get("/api/rag/index").get_json()["size"]
     client.post("/api/rag/reindex")
     idx = client.get("/api/rag/index").get_json()
-    assert idx["index_size"] == idx["size"]                      # reindex 修复漂移
+    assert idx["index_size"] == idx["size"]  # reindex 修复漂移
     assert "DOC-DRIFT-001" not in [h["doc_id"] for h in hits_of(client, "drift probe document")]
 
 
 # ---------- 缺陷 1：中文分词缺失导致召回为 0 ----------
+
 
 @pytest.mark.xfail(reason="注入缺陷 BUG_RAG_CJK_TOKENIZER：中文分词缺失，中文查询召回为 0", strict=True)
 def test_chinese_query_should_recall_document(client):
@@ -232,7 +237,10 @@ def test_ascii_query_still_recalls_under_defect(client):
 
 # ---------- 缺陷 2：排序不稳定 / 分数非降序 ----------
 
-@pytest.mark.xfail(reason="注入缺陷 BUG_RAG_SORT_ASC + BUG_RAG_NO_TIEBREAK：score 未按降序、并列未按 doc_id", strict=True)
+
+@pytest.mark.xfail(
+    reason="注入缺陷 BUG_RAG_SORT_ASC + BUG_RAG_NO_TIEBREAK：score 未按降序、并列未按 doc_id", strict=True
+)
 def test_scores_should_be_descending(client):
     scores = [h["score"] for h in hits_of(client, "search quality metrics")]
     assert scores == sorted(scores, reverse=True)
@@ -261,11 +269,12 @@ def test_buggy_tie_order_breaks_reproducibility(client):
     # 这里是确定性复现（非随机），用于说明缺陷的可观测后果
     first = [h["doc_id"] for h in hits_of(client, "duplicate")]
     second = [h["doc_id"] for h in hits_of(client, "duplicate")]
-    assert first == second          # 缺陷实现下恰好稳定，但次序错误
-    assert first != sorted(first)   # 稳定 ≠ 正确
+    assert first == second  # 缺陷实现下恰好稳定，但次序错误
+    assert first != sorted(first)  # 稳定 ≠ 正确
 
 
 # ---------- 缺陷 3：重复命中（去重缺失）----------
+
 
 @pytest.mark.xfail(reason="注入缺陷 BUG_RAG_DUPLICATE_HITS：多 term 命中同一文档未聚合", strict=True)
 def test_hits_should_not_contain_duplicates(client):
@@ -281,6 +290,7 @@ def test_duplicate_hits_currently_reproduce(client):
 
 
 # ---------- 缺陷 4：陈旧索引（删除后仍被召回）----------
+
 
 def test_deleted_document_is_currently_still_recalled(client):
     # 钉住当前行为：语料已删除，索引未同步 → ghost hit
@@ -301,18 +311,19 @@ def test_deleted_document_should_not_be_recalled(client):
 
 # ---------- 对照组：关闭全部缺陷开关后，同一批断言应全绿 ----------
 
+
 def test_correct_implementation_passes_all_rag_expectations():
     """正确实现的对照：把 RAG_BUGS 全部关掉，前面所有 xfail 期望都应成立。"""
     service = RagService(bugs=CORRECT_BUGS)
     ids = lambda q: [h["doc_id"] for h in service.search(q, 5)]
 
-    assert "DOC-CN-002" in ids("向量数据库")                      # 中文召回
-    assert ids("duplicate") == ["DOC-TIE-001", "DOC-TIE-002"]     # 并列稳定
+    assert "DOC-CN-002" in ids("向量数据库")  # 中文召回
+    assert ids("duplicate") == ["DOC-TIE-001", "DOC-TIE-002"]  # 并列稳定
     assert len(ids("vector database")) == len(set(ids("vector database")))  # 去重
     scores = [h["score"] for h in service.search("search quality metrics", 5)]
-    assert scores == sorted(scores, reverse=True)                 # 降序
-    assert service.validate_search("", "5")[1]                    # 空 q 报错
-    assert service.validate_search("q", "0")[1]                   # 非法 top_k 报错
+    assert scores == sorted(scores, reverse=True)  # 降序
+    assert service.validate_search("", "5")[1]  # 空 q 报错
+    assert service.validate_search("q", "0")[1]  # 非法 top_k 报错
 
     service.add_doc("DOC-GHOST-003", "ghost probe content sigma")
     service.remove_doc("DOC-GHOST-003")
@@ -322,6 +333,12 @@ def test_correct_implementation_passes_all_rag_expectations():
 
 def test_all_bug_switches_default_on():
     # 默认开启全部缺陷以复现问题；这是「缺陷注入」可复现性的前提
-    assert set(RAG_BUGS) == {"cjk_tokenizer", "sort_asc", "no_tiebreak",
-                             "duplicate_hits", "stale_index", "loose_contract"}
+    assert set(RAG_BUGS) == {
+        "cjk_tokenizer",
+        "sort_asc",
+        "no_tiebreak",
+        "duplicate_hits",
+        "stale_index",
+        "loose_contract",
+    }
     assert all(RAG_BUGS.values())

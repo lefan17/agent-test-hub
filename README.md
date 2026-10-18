@@ -460,7 +460,7 @@ sequenceDiagram
   实测代价：2026-10-13 的 4 个 dependabot PR 各留了一个 issue（标题形如「CI 失败：5/merge」），失败原因完全相同。想接企业微信/钉钉机器人（需要 webhook secret）的做法写在 workflow 的注释里，代码中刻意不引用不存在的 secret。
 - **为什么同时有 commitlint 和 scripts/check_commit_msg.py？** commitlint 要求本机有 Node + `npm install`；在只有 Python 的机器上就废了。Python 版零依赖，是**降级路径**而非重复劳动，也保证即使移掉 `package.json`，提交规范门禁依然成立。
   两者还有一个不对称之处：Python 版按作者跳过机器人提交（`SKIP_AUTHORS = ("dependabot[bot]", "github-actions[bot]")`），commitlint 只拿到提交文本、拿不到作者。所以 Dependabot 的分组升级标题（固定句式，实测 76/77 字符，超过本仓 72 上限）只在 commitlint 这一侧判红。处理方式是给 `commitlint.config.mjs` 加一条只匹配该固定句式的 `ignores`，**长度上限本身没有放宽**——它是给人的约束，不该为了迁就机器人而对所有人工提交一起放松。
-- **`ruff format` 为什么没启用？** 实测 `ruff format --check .` → 「35 files would be reformatted, 11 files already formatted」（EXIT=1）。挂进 pre-commit 后任何人 commit 一次就会被强制格式化 35 个业务文件，跨越「只动工程化外壳」的边界。因此本地与 CI 口径一致：只跑 `ruff check`，格式化留作独立任务（见 CHANGELOG 的 Unreleased 段）。
+- **`ruff format` 为什么一开始没启用、后来为什么又启用了？** 起初实测 `ruff format --check .` → 「35 files would be reformatted, 11 files already formatted」（EXIT=1）。挂进 pre-commit 后任何人 commit 一次就会被强制格式化 35 个业务文件，跨越当时「只动工程化外壳」的边界，所以先只跑 `ruff check`。**2026-10-18 把存量一次清完**：`ruff format .` 重排 38 个文件、12 个已合规，重排后 `50 files already formatted`；同一棵树复跑 `pytest -o addopts= -q` 仍是 **165 passed / 15 xfailed**、`python -m mypy` 仍是 **24 source files 零问题**——证明这次重排只动空白。存量清零之后才把 `ruff-format` 同时挂进 pre-commit 与 CI 的 `lint` job（两边同一口径，都跑 `--check`），此后再有人提交未格式化的代码会当场被拦。
 
 ## License
 

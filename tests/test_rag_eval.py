@@ -17,6 +17,7 @@
 第 3 条同时是对照组：它证明这里是「真的在判阈值」，不是「一律判失败」——
 正确实现下同一套阈值判定必须通过，且判失败是返回值而不是抛异常。
 """
+
 from __future__ import annotations
 
 import threading
@@ -33,8 +34,7 @@ MIN_MRR = 0.8
 
 # 只含中文的自然语言查询：默认实现下中文分词缺陷使召回为 0，
 # 但每次请求都是 200——正是「服务正常、召回为 0」的最小复现。
-CHINESE_ONLY = [item for item in RAG_EVAL_SET
-                if item["q"] == "向量数据库" or item["q"] == "中文分词质量"]
+CHINESE_ONLY = [item for item in RAG_EVAL_SET if item["q"] == "向量数据库" or item["q"] == "中文分词质量"]
 
 
 @pytest.fixture
@@ -62,8 +62,7 @@ def correct_rag_server(monkeypatch):
 def _in_memory_report(bugs, queries=RAG_EVAL_SET, k=5):
     """同一套评测集走内存 RagService，用于核对评测集本身的数字。"""
     service = RagService(bugs=bugs)
-    results = [{"q": item["q"], "relevant": item["relevant"],
-                "hits": service.search(item["q"], k)} for item in queries]
+    results = [{"q": item["q"], "relevant": item["relevant"], "hits": service.search(item["q"], k)} for item in queries]
     return build_report(results, k)
 
 
@@ -84,8 +83,7 @@ def test_eval_set_discriminates_defect_from_correct_implementation():
 
 def test_evaluate_end_to_end_judges_threshold_and_fails_under_defects(demo_server_url):
     """端到端：默认（注入缺陷）实现下 recall@5=0.70，阈值 0.8 必须判失败。"""
-    report = rag_evaluate(demo_server_url, RAG_EVAL_SET, top_k=5,
-                          min_recall=MIN_RECALL, min_mrr=MIN_MRR)
+    report = rag_evaluate(demo_server_url, RAG_EVAL_SET, top_k=5, min_recall=MIN_RECALL, min_mrr=MIN_MRR)
 
     assert report["ok"] is True, "HTTP 层应当全部成功——判失败不该是调用失败导致的"
     assert report["quality_ok"] is False
@@ -96,8 +94,7 @@ def test_evaluate_end_to_end_judges_threshold_and_fails_under_defects(demo_serve
 
 def test_evaluate_end_to_end_passes_on_correct_implementation(correct_rag_server):
     """对照组：同一套评测集与阈值，正确实现必须判通过（证明不是一律判失败）。"""
-    report = rag_evaluate(correct_rag_server, RAG_EVAL_SET, top_k=5,
-                          min_recall=MIN_RECALL, min_mrr=MIN_MRR)
+    report = rag_evaluate(correct_rag_server, RAG_EVAL_SET, top_k=5, min_recall=MIN_RECALL, min_mrr=MIN_MRR)
 
     assert report["ok"] is True
     assert report["recall_at_k"] == pytest.approx(1.0)
@@ -111,20 +108,19 @@ def test_healthy_service_with_zero_recall_is_judged_failed(demo_server_url):
     判定依据是阈值比较的结果，不是抛异常、也不是「因为出错了所以失败」——
     此处没有任何异常，`ok=True`，失败只来自 `recall_at_k=0.0 < 0.8`。
     """
-    report = rag_evaluate(demo_server_url, CHINESE_ONLY, top_k=5,
-                          min_recall=MIN_RECALL)
+    report = rag_evaluate(demo_server_url, CHINESE_ONLY, top_k=5, min_recall=MIN_RECALL)
 
     assert report["ok"] is True, "中文查询在缺陷实现下也返回 200"
     assert report["recall_at_k"] == 0.0
     assert report["quality_ok"] is False
     assert report["quality"]["verdicts"] == [
-        {"metric": "recall_at_k", "threshold": MIN_RECALL, "value": 0.0, "ok": False}]
+        {"metric": "recall_at_k", "threshold": MIN_RECALL, "value": 0.0, "ok": False}
+    ]
 
 
 def test_unlabeled_eval_set_is_judged_failed(demo_server_url):
     """假绿口子 1：空标注 + 阈值 0.0 曾让三条断言全部通过，现在必须判失败。"""
-    queries = [{"q": "vector database", "relevant": []},
-               {"q": "bm25 ranking", "relevant": []}]
+    queries = [{"q": "vector database", "relevant": []}, {"q": "bm25 ranking", "relevant": []}]
 
     report = rag_evaluate(demo_server_url, queries, top_k=5, min_recall=0.0)
 
@@ -145,8 +141,9 @@ def test_missing_measured_quantity_is_judged_failed(metric, value):
     else:
         report[metric] = value
 
-    verdict = judge_quality(report, min_recall=0.0 if metric == "recall_at_k" else None,
-                            min_mrr=0.0 if metric == "mrr" else None)
+    verdict = judge_quality(
+        report, min_recall=0.0 if metric == "recall_at_k" else None, min_mrr=0.0 if metric == "mrr" else None
+    )
 
     assert verdict["ok"] is False
     assert verdict["verdicts"] == []

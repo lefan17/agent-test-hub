@@ -170,13 +170,20 @@ ci(deps): bump the actions group across 1 directory with 6 updates              
   `commitlint` 要求本机有 Node + `npm install`；在只有 Python 的机器上就废了。
   Python 版零依赖，是**降级路径**而非重复劳动，也保证即使移掉
   `package.json`，提交规范门禁依然成立。
-- **为什么 `ruff format` 既没进 pre-commit、也没进 CI**：实测
+- **为什么 `ruff format` 起初既没进 pre-commit、也没进 CI**：实测
   `ruff format --check .` → **「35 files would be reformatted, 11 files already
   formatted」（EXIT=1）**。挂上它，任何人 commit 一次就会被迫格式化 35 个文件
   （绝大多数是 `agenttest/` 与 `demo_app/` 的**业务代码**），而本次交付的边界是
   「只动工程化外壳」。因此格式化留作独立任务，两端口径一致：本地与 CI 都只跑
   `ruff check`。仓库另有超长行技术债（实测 `ruff check --select E501`：
   `line-length=88` → 278 处，`line-length=120` → 18 处），E501 亦未启用。
+  > **后续（2026-10-18）**：这个「独立任务」已经做完了——`ruff format .` 重排
+  > 38 个文件（当时是 38 而非 35，因为期间又加了新文件），重排后
+  > `50 files already formatted`；同一棵树复跑 `pytest -o addopts= -q` 仍是
+  > 165 passed / 15 xfailed、`python -m mypy` 仍是 24 source files 零问题。
+  > 存量清零后 `ruff-format` 已同时挂进 `.pre-commit-config.yaml` 与 CI 的 `lint`
+  > job（两边都跑 `--check`）。E501 仍刻意不启用，理由不变：它是风格债，
+  > 不是正确性问题，且与 `[tool.ruff]` 的 line-length 选择绑定。
 
 ### 已知未验证项（诚实声明）
 

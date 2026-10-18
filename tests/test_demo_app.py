@@ -1,4 +1,5 @@
 """被测系统（SUT）自身的功能测试 —— 同时记录其已知缺陷，作为 Agent 应发现缺陷的基准。"""
+
 from __future__ import annotations
 
 import pytest

@@ -1,4 +1,5 @@
 """Brain 抽象接口。"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Protocol

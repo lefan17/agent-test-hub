@@ -1,4 +1,5 @@
 """pytest 共享夹具：被测系统真实 HTTP 服务（会话级）。"""
+
 from __future__ import annotations
 
 import threading

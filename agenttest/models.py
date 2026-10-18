@@ -1,4 +1,5 @@
 """领域模型：测试用例、执行结果、缺陷、报告。"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional
@@ -43,6 +44,7 @@ class Check(BaseModel):
 
 class TestCase(BaseModel):
     """一条测试用例（API / UI / RAG 检索链路）。"""
+
     __test__ = False  # 避免被 pytest 当作测试类收集
 
     id: str = Field(description="用例唯一编号")
@@ -62,13 +64,15 @@ class TestCase(BaseModel):
     # RAG 字段
     rag_query: str = ""
     top_k: int = 5
-    rag_relevant: List[str] = Field(default_factory=list,
-                                    description="标注为相关的 doc_id 集合，用于计算 recall@k / MRR")
+    rag_relevant: List[str] = Field(
+        default_factory=list, description="标注为相关的 doc_id 集合，用于计算 recall@k / MRR"
+    )
     source: str = "spec"
 
 
 class TestResult(BaseModel):
     """单条用例的执行结果。"""
+
     __test__ = False  # 避免被 pytest 当作测试类收集
 
     case_id: str
@@ -89,6 +93,7 @@ class TestResult(BaseModel):
 
 class Defect(BaseModel):
     """Agent 分析失败结果后产出的缺陷结论。"""
+
     __test__ = False  # 避免被 pytest 当作测试类收集
 
     id: str
@@ -103,6 +108,7 @@ class Defect(BaseModel):
 
 class TestReport(BaseModel):
     """一次完整运行的报告。"""
+
     __test__ = False  # 避免被 pytest 当作测试类收集
 
     goal: str

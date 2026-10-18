@@ -4,6 +4,7 @@
 使用真实 LLM 时，Agent 的"规划能力"来自大模型对契约的理解；工具执行仍走确定性代码，
 既展示 Agent 智能，又保证测试结果可复现。
 """
+
 from __future__ import annotations
 
 import json
@@ -60,8 +61,7 @@ class _DefectDraft(BaseModel):
     severity: str = "medium"
     category: str = "bug"
     endpoint: str = ""
-    case_ids: List[str] = Field(default_factory=list,
-                               description="该缺陷对应的失败用例 id，必须来自本次失败结果")
+    case_ids: List[str] = Field(default_factory=list, description="该缺陷对应的失败用例 id，必须来自本次失败结果")
     evidence: str = ""
     suggestion: str = ""
 
@@ -203,8 +203,15 @@ class LLMBrain:
         if not failed:
             return []
         payload = [
-            {"case_id": r.case_id, "title": r.title, "expected": r.expected, "actual": r.actual,
-             "error": r.error, "evidence": r.evidence, "attempts": r.attempts}
+            {
+                "case_id": r.case_id,
+                "title": r.title,
+                "expected": r.expected,
+                "actual": r.actual,
+                "error": r.error,
+                "evidence": r.evidence,
+                "attempts": r.attempts,
+            }
             for r in failed
         ]
         prompt = SYSTEM_ANALYSIS_PROMPT.format(results=json.dumps(payload, ensure_ascii=False, indent=2))
@@ -215,15 +222,20 @@ class LLMBrain:
             return self._fallback_defects(results, context, f"LLM 归因调用失败（{type(exc).__name__}: {exc}）")
         defects = []
         for i, d in enumerate(out.defects or [], start=1):
-            defects.append(Defect(
-                id=f"DEF-{i:03d}",
-                title=d.title,
-                severity=d.severity if d.severity in {"critical", "high", "medium", "low"} else "medium",
-                category=d.category if d.category in {"bug", "contract", "flaky", "environment", "test_issue", "relevance"} else "bug",
-                endpoint=d.endpoint,
-                evidence=d.evidence,
-                suggestion=d.suggestion,
-                related_case_ids=_resolve_related_case_ids(
-                    list(getattr(d, "case_ids", []) or []), failed, d.endpoint),
-            ))
+            defects.append(
+                Defect(
+                    id=f"DEF-{i:03d}",
+                    title=d.title,
+                    severity=d.severity if d.severity in {"critical", "high", "medium", "low"} else "medium",
+                    category=d.category
+                    if d.category in {"bug", "contract", "flaky", "environment", "test_issue", "relevance"}
+                    else "bug",
+                    endpoint=d.endpoint,
+                    evidence=d.evidence,
+                    suggestion=d.suggestion,
+                    related_case_ids=_resolve_related_case_ids(
+                        list(getattr(d, "case_ids", []) or []), failed, d.endpoint
+                    ),
+                )
+            )
         return defects

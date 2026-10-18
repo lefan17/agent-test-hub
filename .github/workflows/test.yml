@@ -151,12 +151,24 @@ jobs:
         run: python -m mypy
 
       # ruff 的规则集同样来自 pyproject.toml [tool.ruff]。
-      # 为什么不上 `ruff format --check`：实测 `ruff format --check .` 报
-      # 「35 files would be reformatted, 11 files already formatted」（EXIT=1），
-      # 一次性格式化会跨越「只动工程化外壳」的边界（会改动业务文件的大量行）。
-      # 格式化留作独立任务，见 CHANGELOG 的 Unreleased 段。
       - name: ruff 代码规范检查
         run: python -m ruff check . --output-format=github
+
+      # `ruff format --check` 是**阻塞项**（2026-10-18 起）。
+      #
+      # 此前这里特意没有这一步，理由写在下面（原文保留，作为决策记录）：
+      #   「实测 `ruff format --check .` 报 35 files would be reformatted, 11 files
+      #     already formatted（EXIT=1），一次性格式化会跨越『只动工程化外壳』的边界。」
+      # 那个理由在当时成立，但它把一件工程卫生的事无限期推后了：只跑 `ruff check`
+      # 而不管格式，等于格式约定靠人自觉，而人不会自觉。
+      #
+      # 2026-10-18 把存量一次清完：本机 `ruff format .` 重排 38 个文件、12 个已合规，
+      # 重排后 50 files already formatted；同一棵树复跑 `pytest -o addopts= -q` 仍是
+      # 165 passed / 15 xfailed，`python -m mypy` 仍是 24 source files 零问题——
+      # 即这次重排只动空白，没动任何判定逻辑。
+      # 存量清零之后再挂门禁才是有意义的：从此刻起，新增的未格式化代码会当场被拦。
+      - name: ruff 格式检查（阻塞）
+        run: python -m ruff format --check .
 
       # 锁文件一致性：CI 必须发现「有人改了 requirements.txt 却忘了重新 compile」。
       # requirements.lock 由 `python -m piptools compile requirements.txt` 生成，

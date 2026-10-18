@@ -10,6 +10,7 @@
 
 详见 `.env.example`。
 """
+
 from __future__ import annotations
 
 import os
@@ -63,9 +64,7 @@ def resolve_env_name() -> str:
     """读取 `AGENTTEST_ENV`，校验取值；默认 dev。"""
     name = _env("AGENTTEST_ENV", DEFAULT_ENV).lower() or DEFAULT_ENV
     if name not in KNOWN_ENVS:
-        raise ValueError(
-            f"未知的 AGENTTEST_ENV={name!r}，可选值：{' / '.join(KNOWN_ENVS)}"
-        )
+        raise ValueError(f"未知的 AGENTTEST_ENV={name!r}，可选值：{' / '.join(KNOWN_ENVS)}")
     return name
 
 
@@ -83,12 +82,12 @@ class Config:
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_model: str = "deepseek-chat"
-    ui_backend: str = "auto"          # auto | chrome | selenium
+    ui_backend: str = "auto"  # auto | chrome | selenium
     chrome_path: str = ""
     report_dir: Path = field(default_factory=lambda: Path("reports"))
-    max_attempts: int = 3             # 失败/不稳定用例重试次数
+    max_attempts: int = 3  # 失败/不稳定用例重试次数
     workdir: Path = field(default_factory=Path.cwd)
-    env: str = DEFAULT_ENV            # 当前配置档案：dev | staging | prod
+    env: str = DEFAULT_ENV  # 当前配置档案：dev | staging | prod
 
     @property
     def llm_configured(self) -> bool:

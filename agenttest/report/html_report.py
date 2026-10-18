@@ -1,4 +1,5 @@
 """HTML 报告渲染（Jinja2，自包含单文件，可直接浏览器打开）。"""
+
 from __future__ import annotations
 
 from pathlib import Path

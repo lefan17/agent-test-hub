@@ -1,4 +1,5 @@
 """构建 LangGraph 状态图。"""
+
 from __future__ import annotations
 
 from langgraph.graph import END, StateGraph

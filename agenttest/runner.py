@@ -6,6 +6,7 @@
   python -m agenttest run --no-ui         # 只跑 API 用例
   python -m agenttest run --keep-server   # 跑完保留被测系统，方便手动浏览
 """
+
 from __future__ import annotations
 
 import argparse
@@ -71,8 +72,7 @@ def pick_brain(cfg: Config, force_llm: bool):
 
 def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="agenttest", description="Agent 自动测试系统")
-    p.add_argument("command", nargs="?", choices=["run"], default="run",
-                   help="子命令（当前仅 run，可省略）")
+    p.add_argument("command", nargs="?", choices=["run"], default="run", help="子命令（当前仅 run，可省略）")
     p.add_argument("--goal", default="对被测待办清单系统执行 API + Web UI 自动化测试，发现缺陷并生成报告")
     p.add_argument("--demo-url", default=None, help="被测系统地址（默认 http://127.0.0.1:5001）")
     p.add_argument("--report-dir", default=None, help="报告输出目录（默认 ./reports）")
@@ -134,9 +134,11 @@ def main(argv: Optional[list] = None) -> int:
 
     try:
         spec = fetch_openapi(cfg.demo_url)
-        print(f"[runner] 已获取契约: {spec.get('info', {}).get('title', 'OpenAPI')} "
-              f"v{spec.get('info', {}).get('version', '?')}，"
-              f"{len(spec.get('paths', {}))} 个端点")
+        print(
+            f"[runner] 已获取契约: {spec.get('info', {}).get('title', 'OpenAPI')} "
+            f"v{spec.get('info', {}).get('version', '?')}，"
+            f"{len(spec.get('paths', {}))} 个端点"
+        )
 
         brain = pick_brain(cfg, args.force_llm)
         print(f"[runner] Brain = {brain.name}{'（LLM: ' + cfg.llm_model + '）' if brain.name == 'llm' else ''}")

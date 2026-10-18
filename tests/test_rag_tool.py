@@ -6,12 +6,22 @@
   与 test_demo_app.py 的做法一致——缺陷一旦被修复，xfail 会转为 XPASS 从而让测试失败，
   逼迫我们同步更新基准。
 """
+
 from __future__ import annotations
 
 import pytest
 
-from agenttest.tools import (doc_ids_of, rag_add_doc, rag_consistency_probe, rag_delete_doc,
-                             rag_evaluate, rag_index, rag_reindex, rag_search, rag_update_doc)
+from agenttest.tools import (
+    doc_ids_of,
+    rag_add_doc,
+    rag_consistency_probe,
+    rag_delete_doc,
+    rag_evaluate,
+    rag_index,
+    rag_reindex,
+    rag_search,
+    rag_update_doc,
+)
 from agenttest.tools.rag_tool import RAG_PROBE_DOC_ID, RAG_PROBE_QUERY, RAG_PROBE_TEXT
 from demo_app.app import create_app
 from demo_app.rag import RAG_MAX_QUERY_LEN, RAG_MAX_TOP_K
@@ -32,6 +42,7 @@ def rag_url(demo_server_url):
 
 
 # ---------- 接口契约 ----------
+
 
 def test_search_response_contract(client):
     body = client.get("/api/rag/search?q=vector%20database&top_k=5").get_json()
@@ -102,19 +113,21 @@ def test_missing_q_must_be_400(client):
 
 # ---------- 钉住当前缺陷行为（与 test_api_tool.py 同一约定：工具如实返回实际状态）----------
 
+
 def test_empty_query_currently_returns_200(client):
     r = client.get("/api/rag/search", query_string={"q": "", "top_k": 5})
-    assert r.status_code == 200          # 实测当前行为，契约要求 400
+    assert r.status_code == 200  # 实测当前行为，契约要求 400
     assert r.get_json()["hits"] == []
 
 
 def test_top_k_zero_currently_returns_200(client):
     r = client.get("/api/rag/search?q=vector%20database&top_k=0")
-    assert r.status_code == 200          # 实测当前行为，契约要求 400
-    assert r.get_json()["top_k"] == 5    # 被静默回退为默认值
+    assert r.status_code == 200  # 实测当前行为，契约要求 400
+    assert r.get_json()["top_k"] == 5  # 被静默回退为默认值
 
 
 # ---------- 工具层：只如实返回，不下断言 ----------
+
 
 def test_rag_search_tool_reports_200_and_hits(rag_url):
     detail = rag_search(rag_url, "search quality metrics", 5)
@@ -128,8 +141,8 @@ def test_rag_search_tool_reports_200_and_hits(rag_url):
 def test_rag_search_tool_pins_current_buggy_contract(rag_url):
     # 钉住当前行为：空 q 实现返回 200（契约要求 400），工具如实透传状态码与 body
     detail = rag_search(rag_url, "", 5)
-    assert detail["ok"] is True          # 调用本身成功
-    assert detail["status"] == 200       # 但契约不符 —— 由用例层判定失败
+    assert detail["ok"] is True  # 调用本身成功
+    assert detail["status"] == 200  # 但契约不符 —— 由用例层判定失败
     assert detail["hits"] == []
 
 
@@ -176,11 +189,16 @@ def test_rag_update_doc_tool(rag_url):
 
 # ---------- 检索质量指标（打到真实端点）----------
 
+
 def test_rag_evaluate_reports_metrics(rag_url):
-    report = rag_evaluate(rag_url, [
-        {"q": "search quality metrics", "relevant": ["DOC-EN-004"]},
-        {"q": "bm25 ranking", "relevant": ["DOC-CN-003"]},
-    ], top_k=5)
+    report = rag_evaluate(
+        rag_url,
+        [
+            {"q": "search quality metrics", "relevant": ["DOC-EN-004"]},
+            {"q": "bm25 ranking", "relevant": ["DOC-CN-003"]},
+        ],
+        top_k=5,
+    )
     assert report["ok"] is True
     assert report["query_count"] == 2
     # 两条查询都命中了相关文档，因此 recall@5 为 1.0
@@ -188,6 +206,7 @@ def test_rag_evaluate_reports_metrics(rag_url):
     # 第二条查询的相关文档被排到 rank 3（错误排序），RR=1/3 → MRR=(1.0+1/3)/2
     assert report["per_query"][1]["retrieved"][-1] == "DOC-CN-003"
     assert report["mrr"] == pytest.approx((1.0 + 1 / 3) / 2)
+
 
 def test_rag_evaluate_chinese_recall_is_zero_under_defect(rag_url):
     # 钉住当前行为：中文分词缺失 → 中文查询 recall@k 恒为 0（本仓库最核心的检索缺陷）
@@ -199,6 +218,7 @@ def test_rag_evaluate_chinese_recall_is_zero_under_defect(rag_url):
 
 
 # ---------- 索引一致性探针 ----------
+
 
 def test_consistency_probe_self_cleans(rag_url):
     probe = rag_consistency_probe(rag_url)

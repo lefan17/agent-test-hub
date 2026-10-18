@@ -11,6 +11,7 @@ RAG 检索链路（demo_app/rag.py）另注入 6 个缺陷，见该模块 RAG_BU
 
 契约以 demo_app/openapi.json 为准，代码实现与契约的偏差就是 Agent 要发现的缺陷。
 """
+
 from __future__ import annotations
 
 import os
@@ -45,7 +46,13 @@ class TodoStore:
         self._lock = threading.Lock()
         self._next_id = 3
         self._todos: Dict[int, Dict[str, Any]] = {
-            1: {"id": 1, "title": "学习 LangGraph 状态图", "priority": "high", "status": "active", "created_at": _now()},
+            1: {
+                "id": 1,
+                "title": "学习 LangGraph 状态图",
+                "priority": "high",
+                "status": "active",
+                "created_at": _now(),
+            },
             2: {"id": 2, "title": "写 Agent 测试用例", "priority": "medium", "status": "done", "created_at": _now()},
         }
 
@@ -224,11 +231,13 @@ def create_app() -> Flask:
     @app.get("/api/stats")
     def stats() -> Any:
         items = store.list()
-        return jsonify({
-            "total": len(items),
-            "active": len([t for t in items if t["status"] == "active"]),
-            "done": len([t for t in items if t["status"] == "done"]),
-        })
+        return jsonify(
+            {
+                "total": len(items),
+                "active": len([t for t in items if t["status"] == "active"]),
+                "done": len([t for t in items if t["status"] == "done"]),
+            }
+        )
 
     # ---------- RAG 检索链路 ----------
     @app.get("/api/rag/index")
@@ -241,18 +250,19 @@ def create_app() -> Flask:
         if error:
             return jsonify({"error": error}), 400
         hits = rag.search(request.args.get("q") or "", top_k)
-        return jsonify({
-            "query": request.args.get("q") or "",
-            "top_k": top_k,
-            "hits": hits,
-            "index": {"backend": rag.backend.name, "size": rag.size(), "version": rag.version},
-        })
+        return jsonify(
+            {
+                "query": request.args.get("q") or "",
+                "top_k": top_k,
+                "hits": hits,
+                "index": {"backend": rag.backend.name, "size": rag.size(), "version": rag.version},
+            }
+        )
 
     @app.post("/api/rag/reindex")
     def rag_reindex() -> Any:
         version = rag.reindex()
-        return jsonify({"reindexed": True, "version": version, "size": rag.size(),
-                        "backend": rag.backend.name})
+        return jsonify({"reindexed": True, "version": version, "size": rag.size(), "backend": rag.backend.name})
 
     @app.post("/api/rag/docs")
     def rag_add_doc() -> Any:
@@ -265,8 +275,7 @@ def create_app() -> Flask:
             return jsonify({"error": "doc_id and text are required"}), 400
         existed = rag.has_doc(doc_id)
         rag.add_doc(doc_id, text)
-        return jsonify({"data": {"doc_id": doc_id, "text": text},
-                        "upserted": existed, "version": rag.version}), 201
+        return jsonify({"data": {"doc_id": doc_id, "text": text}, "upserted": existed, "version": rag.version}), 201
 
     @app.patch("/api/rag/docs/<path:doc_id>")
     def rag_update_doc(doc_id: str) -> Any:
@@ -282,8 +291,7 @@ def create_app() -> Flask:
     def rag_delete_doc(doc_id: str) -> Any:
         if not rag.remove_doc(doc_id):
             return jsonify({"error": "document not found"}), 404
-        return jsonify({"deleted": doc_id, "version": rag.version,
-                        "index_size": rag.index_size()})
+        return jsonify({"deleted": doc_id, "version": rag.version, "index_size": rag.index_size()})
 
     # ---------- Web 页面 ----------
     @app.get("/")

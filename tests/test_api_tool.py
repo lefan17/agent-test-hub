@@ -1,4 +1,5 @@
 """api_tool 与真实被测服务的集成测试。"""
+
 from __future__ import annotations
 
 from agenttest.tools import api_request, fetch_openapi

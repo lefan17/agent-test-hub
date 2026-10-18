@@ -33,12 +33,17 @@ repos:
     hooks:
       - id: ruff
         args: ["--fix"]
-      # 刻意**不挂 ruff-format**：实测 `ruff format --check .` 显示
-      # 「35 files would be reformatted, 11 files already formatted」。
-      # 挂上它，任何人 commit 一次就会被迫格式化 35 个文件（绝大多数是
-      # agenttest/ 与 demo_app/ 的业务代码），这次交付的边界是「只动工程化外壳」，
-      # 因此格式化留作独立任务（见 CHANGELOG 的 Unreleased 段）。
-      # CI 同样只跑 `ruff check`，不跑 `ruff format --check`，两端口径一致。
+      # `ruff-format` 于 2026-10-18 挂上，与 CI 的 lint job 同步。
+      #
+      # 此前刻意没挂，理由（原文保留，作为决策记录）：实测 `ruff format --check .`
+      # 显示「35 files would be reformatted, 11 files already formatted」，挂上它
+      # 任何人 commit 一次就会被强制格式化 35 个业务文件，而当时这次交付的边界
+      # 是「只动工程化外壳」。那个取舍在当时是对的。
+      #
+      # 现在存量已经一次清完（38 files reformatted → 50 files already formatted），
+      # 再挂上就不会「被迫格式化别人的代码」——只剩「你自己新写的代码要合规」。
+      # 本地与 CI 依旧是同一口径：两边都跑 `ruff format --check`。
+      - id: ruff-format
 
   # ---------- mypy：与 CI lint job 同一条命令、同一份 [tool.mypy] 配置 ----------
   #

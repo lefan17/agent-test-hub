@@ -1,4 +1,5 @@
 """MockBrain（规则引擎）的规划与归因逻辑测试。"""
+
 from __future__ import annotations
 
 from agenttest.brain import MockBrain
@@ -19,9 +20,17 @@ def test_plan_covers_api_and_ui():
 
 def test_analyze_contract_mismatch_500():
     brain = MockBrain()
-    r = TestResult(case_id="API-006", title="非法 status", kind="api", ok=False,
-                   expected="400", actual="500", actual_status=500,
-                   error="期望 400，实际 500", evidence="")
+    r = TestResult(
+        case_id="API-006",
+        title="非法 status",
+        kind="api",
+        ok=False,
+        expected="400",
+        actual="500",
+        actual_status=500,
+        error="期望 400，实际 500",
+        evidence="",
+    )
     defects = brain.analyze_failures([r], {})
     assert len(defects) == 1
     assert defects[0].category == "contract"
@@ -30,9 +39,17 @@ def test_analyze_contract_mismatch_500():
 
 def test_analyze_empty_title_bug():
     brain = MockBrain()
-    r = TestResult(case_id="API-008", title="空 title", kind="api", ok=False,
-                   expected="400", actual="200", actual_status=200,
-                   error="期望 400，实际 200", evidence="脏数据已写入")
+    r = TestResult(
+        case_id="API-008",
+        title="空 title",
+        kind="api",
+        ok=False,
+        expected="400",
+        actual="200",
+        actual_status=200,
+        error="期望 400，实际 200",
+        evidence="脏数据已写入",
+    )
     defects = brain.analyze_failures([r], {})
     assert defects[0].category == "bug"
     assert "校验" in defects[0].suggestion
@@ -40,18 +57,25 @@ def test_analyze_empty_title_bug():
 
 def test_analyze_flaky():
     brain = MockBrain()
-    r = TestResult(case_id="API-015", title="不稳定服务", kind="api", ok=False,
-                   expected="200", actual="503", actual_status=503,
-                   error="service temporarily unavailable",
-                   evidence="service temporarily unavailable", attempts=3)
+    r = TestResult(
+        case_id="API-015",
+        title="不稳定服务",
+        kind="api",
+        ok=False,
+        expected="200",
+        actual="503",
+        actual_status=503,
+        error="service temporarily unavailable",
+        evidence="service temporarily unavailable",
+        attempts=3,
+    )
     defects = brain.analyze_failures([r], {})
     assert defects[0].category == "flaky"
 
 
 def test_analyze_pass_only_no_defects():
     brain = MockBrain()
-    r = TestResult(case_id="API-001", title="健康检查", kind="api", ok=True,
-                   expected="200", actual="200")
+    r = TestResult(case_id="API-001", title="健康检查", kind="api", ok=True, expected="200", actual="200")
     assert brain.analyze_failures([r], {}) == []
 
 
@@ -64,12 +88,27 @@ def test_analyze_no_response_is_an_environment_issue_not_a_product_defect():
     """
     brain = MockBrain()
     broken = [
-        TestResult(case_id="API-001", title="健康检查", kind="api", ok=False,
-                   expected="200", actual="", actual_status=0,
-                   error="ConnectionError: 无法连接 127.0.0.1:59999"),
-        TestResult(case_id="RAG-001", title="检索召回", kind="rag", ok=False,
-                   expected="200", actual="", actual_status=0, rag_query="向量数据库",
-                   error="ConnectionError: 无法连接 127.0.0.1:59999"),
+        TestResult(
+            case_id="API-001",
+            title="健康检查",
+            kind="api",
+            ok=False,
+            expected="200",
+            actual="",
+            actual_status=0,
+            error="ConnectionError: 无法连接 127.0.0.1:59999",
+        ),
+        TestResult(
+            case_id="RAG-001",
+            title="检索召回",
+            kind="rag",
+            ok=False,
+            expected="200",
+            actual="",
+            actual_status=0,
+            rag_query="向量数据库",
+            error="ConnectionError: 无法连接 127.0.0.1:59999",
+        ),
     ]
     defects = brain.analyze_failures(broken, {})
     assert len(defects) == 2
@@ -84,12 +123,19 @@ def test_analyze_a_real_rag_recall_failure_is_still_relevance():
     这条与上一条一起钉住判据的方向——加环境分支不能把真缺陷也吞掉。
     """
     brain = MockBrain()
-    r = TestResult(case_id="RAG-002", title="中文召回", kind="rag", ok=False,
-                   expected="200", actual="200 hits=[] recall@5=0.0000 MRR=0.0000",
-                   actual_status=200, rag_query="向量数据库",
-                   error="recall@5=0.000000 < 阈值 1.0",
-                   evidence="命中缺少 ['DOC-CN-002']（实际 []）",
-                   metrics={"recall_at_k": 0.0, "mrr": 0.0})
+    r = TestResult(
+        case_id="RAG-002",
+        title="中文召回",
+        kind="rag",
+        ok=False,
+        expected="200",
+        actual="200 hits=[] recall@5=0.0000 MRR=0.0000",
+        actual_status=200,
+        rag_query="向量数据库",
+        error="recall@5=0.000000 < 阈值 1.0",
+        evidence="命中缺少 ['DOC-CN-002']（实际 []）",
+        metrics={"recall_at_k": 0.0, "mrr": 0.0},
+    )
     defects = brain.analyze_failures([r], {})
     assert len(defects) == 1
     assert defects[0].category == "relevance"

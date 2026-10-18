@@ -15,6 +15,7 @@
 
 退出码：0 = 全部合规；1 = 有不合法提交信息。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,8 +27,17 @@ from typing import List
 
 # 与本仓库 git log 里实际出现过的 type 对齐（含 CI 改动常用的 chore / docs / fix / feat）
 TYPES = (
-    "feat", "fix", "docs", "style", "refactor", "perf",
-    "test", "build", "ci", "chore", "revert",
+    "feat",
+    "fix",
+    "docs",
+    "style",
+    "refactor",
+    "perf",
+    "test",
+    "build",
+    "ci",
+    "chore",
+    "revert",
 )
 
 # 允许的可选 scope：英文小写 + 连字符/下划线
@@ -43,7 +53,7 @@ HEADER_RE = re.compile(
 
 SUBJECT_MAX = 72
 # 合并提交 / 回滚 / 依赖机器人自动提交，不参与规范校验
-SKIP_PREFIXES = ("Merge ", "Revert \"", "fixup!", "squash!")
+SKIP_PREFIXES = ("Merge ", 'Revert "', "fixup!", "squash!")
 SKIP_AUTHORS = ("dependabot[bot]", "github-actions[bot]")
 
 
@@ -53,8 +63,7 @@ def validate_header(header: str) -> List[str]:
     match = HEADER_RE.match(header)
     if not match:
         problems.append(
-            "格式不符合 Conventional Commits，应为 "
-            "<type>(<scope>): <描述>，其中 type ∈ {" + ", ".join(TYPES) + "}"
+            "格式不符合 Conventional Commits，应为 <type>(<scope>): <描述>，其中 type ∈ {" + ", ".join(TYPES) + "}"
         )
         return problems
 
@@ -94,7 +103,10 @@ def check_range(rev_range: str) -> int:
     fmt = "%H%x1f%an%x1f%s%x1e"
     proc = subprocess.run(
         ["git", "log", f"--format={fmt}", rev_range],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if proc.returncode != 0:
         print(proc.stderr.strip(), file=sys.stderr)

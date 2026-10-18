@@ -5,6 +5,7 @@
     再用 BeautifulSoup 做断言，同时可截图。零驱动、零下载，离线可用。
   - selenium 后端：完整交互式自动化（填表/点击），需要 chromedriver 可用。
 """
+
 from __future__ import annotations
 
 import re
@@ -27,8 +28,12 @@ class UiUnavailableError(RuntimeError):
 def _run_cmd(cmd: List[str], timeout: int = 30) -> subprocess.CompletedProcess:
     # Windows 下 Chrome 可能输出 GBK 编码文本，统一按 utf-8 容错解码
     return subprocess.run(
-        cmd, capture_output=True, text=True, timeout=timeout,
-        encoding="utf-8", errors="replace",
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        encoding="utf-8",
+        errors="replace",
     )
 
 
@@ -56,8 +61,16 @@ def _chrome_screenshot(chrome_path: str, url: str, out_path: Path) -> Optional[s
     try:
         abs_path = str(out_path.resolve())  # Chrome 对相对路径解析异常，必须用绝对路径
         proc = _run_cmd(
-            [chrome_path, "--headless=new", "--disable-gpu", "--no-sandbox",
-             "--hide-scrollbars", "--window-size=1280,800", f"--screenshot={abs_path}", url]
+            [
+                chrome_path,
+                "--headless=new",
+                "--disable-gpu",
+                "--no-sandbox",
+                "--hide-scrollbars",
+                "--window-size=1280,800",
+                f"--screenshot={abs_path}",
+                url,
+            ]
         )
         if proc.returncode == 0 and out_path.exists():
             return str(out_path)
@@ -83,20 +96,34 @@ def _selenium_check(url: str, checks: List[Check], screenshot_path: Optional[Pat
         for c in checks:
             if c.type == "contains_text":
                 ok = c.target in driver.find_element(By.TAG_NAME, "body").text
-                results.append({"type": c.type, "target": c.target, "ok": ok, "detail": "页面文本包含" if ok else "页面文本不包含"})
+                results.append(
+                    {"type": c.type, "target": c.target, "ok": ok, "detail": "页面文本包含" if ok else "页面文本不包含"}
+                )
             elif c.type == "has_element":
                 ok = len(driver.find_elements(By.CSS_SELECTOR, c.target)) > 0
-                results.append({"type": c.type, "target": c.target, "ok": ok, "detail": "元素存在" if ok else "元素不存在"})
+                results.append(
+                    {"type": c.type, "target": c.target, "ok": ok, "detail": "元素存在" if ok else "元素不存在"}
+                )
             elif c.type == "title_contains":
                 ok = c.target in driver.title
                 results.append({"type": c.type, "target": c.target, "ok": ok, "detail": f"标题: {driver.title}"})
             else:
                 # 未实现的断言类型必须判失败：静默跳过会让 all([]) / 全 True 组合出假绿
-                results.append({"type": c.type, "target": c.target, "ok": False,
-                                "detail": f"未实现的断言类型 {c.type}（UI 后端未支持，按失败处理）"})
+                results.append(
+                    {
+                        "type": c.type,
+                        "target": c.target,
+                        "ok": False,
+                        "detail": f"未实现的断言类型 {c.type}（UI 后端未支持，按失败处理）",
+                    }
+                )
         if screenshot_path:
             driver.save_screenshot(str(screenshot_path))
-        return {"ok": all(r["ok"] for r in results), "results": results, "screenshot": str(screenshot_path) if screenshot_path and screenshot_path.exists() else None}
+        return {
+            "ok": all(r["ok"] for r in results),
+            "results": results,
+            "screenshot": str(screenshot_path) if screenshot_path and screenshot_path.exists() else None,
+        }
     finally:
         driver.quit()
 
@@ -124,20 +151,33 @@ def ui_check(
             for c in checks:
                 if c.type == "contains_text":
                     ok = c.target in body_text
-                    results.append({"type": c.type, "target": c.target, "ok": ok,
-                                    "detail": "页面文本包含" if ok else "页面文本不包含"})
+                    results.append(
+                        {
+                            "type": c.type,
+                            "target": c.target,
+                            "ok": ok,
+                            "detail": "页面文本包含" if ok else "页面文本不包含",
+                        }
+                    )
                 elif c.type == "has_element":
                     ok = bool(soup.select_one(c.target))
-                    results.append({"type": c.type, "target": c.target, "ok": ok,
-                                    "detail": "元素存在" if ok else "元素不存在"})
+                    results.append(
+                        {"type": c.type, "target": c.target, "ok": ok, "detail": "元素存在" if ok else "元素不存在"}
+                    )
                 elif c.type == "title_contains":
                     title = soup.title.string if soup.title else ""
                     ok = c.target in (title or "")
                     results.append({"type": c.type, "target": c.target, "ok": ok, "detail": f"标题: {title}"})
                 else:
                     # 未实现的断言类型必须判失败：静默跳过会让 all([]) 组合出假绿
-                    results.append({"type": c.type, "target": c.target, "ok": False,
-                                    "detail": f"未实现的断言类型 {c.type}（UI 后端未支持，按失败处理）"})
+                    results.append(
+                        {
+                            "type": c.type,
+                            "target": c.target,
+                            "ok": False,
+                            "detail": f"未实现的断言类型 {c.type}（UI 后端未支持，按失败处理）",
+                        }
+                    )
             shot = None
             if screenshot_path:
                 shot = _chrome_screenshot(found_chrome, url, screenshot_path)

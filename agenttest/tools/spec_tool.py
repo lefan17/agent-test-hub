@@ -1,4 +1,5 @@
 """契约读取工具：从被测系统获取 OpenAPI 规范并生成摘要。"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List

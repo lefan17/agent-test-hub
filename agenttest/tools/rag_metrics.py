@@ -16,6 +16,7 @@ LABELED_QUERIES 是一份小标注集（7 条查询，k=5）：
   缺陷实现 recall@5=MRR=0.5714（4/7），正确实现两项均为 1.0000。
 RAG_EVAL_SET 是用于**阈值判定**的 20 条评测集（见该常量上方说明）。
 """
+
 from __future__ import annotations
 
 import math
@@ -87,7 +88,7 @@ def recall_at_k(hits: Sequence[Dict[str, Any]], relevant: Sequence[str], k: int)
     if not relevant:
         return 0.0
     expected = {str(doc_id) for doc_id in relevant}
-    retrieved = set(doc_ids_of(hits)[:max(int(k), 0)])
+    retrieved = set(doc_ids_of(hits)[: max(int(k), 0)])
     return len(retrieved & expected) / len(expected)
 
 
@@ -127,14 +128,16 @@ def build_report(results: Sequence[Dict[str, Any]], k: int) -> Dict[str, Any]:
     for item in results:
         hits = list(item.get("hits") or [])
         relevant = [str(doc_id) for doc_id in (item.get("relevant") or [])]
-        per_query.append({
-            "query": item.get("q", ""),
-            "relevant": relevant,
-            "labeled": bool(relevant),
-            "retrieved": doc_ids_of(hits)[:max(int(k), 0)],
-            "recall_at_k": recall_at_k(hits, relevant, k),
-            "reciprocal_rank": reciprocal_rank(hits, relevant),
-        })
+        per_query.append(
+            {
+                "query": item.get("q", ""),
+                "relevant": relevant,
+                "labeled": bool(relevant),
+                "retrieved": doc_ids_of(hits)[: max(int(k), 0)],
+                "recall_at_k": recall_at_k(hits, relevant, k),
+                "reciprocal_rank": reciprocal_rank(hits, relevant),
+            }
+        )
     labeled = [p for p in per_query if p["labeled"]]
     count = len(labeled) or 1
     return {
@@ -158,8 +161,7 @@ def check_rank_monotonic(hits: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         prev = float(items[index - 1].get("score") or 0.0)
         cur = float(items[index].get("score") or 0.0)
         if cur > prev + EPS:
-            return {"ok": False,
-                    "detail": f"score 非降序: rank{index}={prev:.6f} < rank{index + 1}={cur:.6f}"}
+            return {"ok": False, "detail": f"score 非降序: rank{index}={prev:.6f} < rank{index + 1}={cur:.6f}"}
     return {"ok": True, "detail": "score 单调非增、rank 连续"}
 
 
@@ -170,9 +172,13 @@ def check_tie_by_doc_id(hits: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         prev, cur = items[index - 1], items[index]
         same_score = abs(float(prev.get("score") or 0.0) - float(cur.get("score") or 0.0)) < EPS
         if same_score and str(prev.get("doc_id")) > str(cur.get("doc_id")):
-            return {"ok": False,
-                    "detail": (f"并列分数未按 doc_id 升序: {prev.get('doc_id')}"
-                               f"(rank{prev.get('rank')}) 排在 {cur.get('doc_id')}(rank{cur.get('rank')}) 之前")}
+            return {
+                "ok": False,
+                "detail": (
+                    f"并列分数未按 doc_id 升序: {prev.get('doc_id')}"
+                    f"(rank{prev.get('rank')}) 排在 {cur.get('doc_id')}(rank{cur.get('rank')}) 之前"
+                ),
+            }
     return {"ok": True, "detail": "并列分数按 doc_id 升序"}
 
 
@@ -196,9 +202,9 @@ def _as_finite_float(value: Any) -> Optional[float]:
     return number if math.isfinite(number) else None
 
 
-def judge_quality(report: Dict[str, Any], *,
-                  min_recall: Optional[float] = None,
-                  min_mrr: Optional[float] = None) -> Dict[str, Any]:
+def judge_quality(
+    report: Dict[str, Any], *, min_recall: Optional[float] = None, min_mrr: Optional[float] = None
+) -> Dict[str, Any]:
     """对 `build_report` / `rag_evaluate` 的产出做**阈值判定**，返回结论。
 
     这是「跑通」与「达标」之间的那一层：`rag_evaluate` 的 `ok` 只表示 HTTP 调用成功，
@@ -221,16 +227,25 @@ def judge_quality(report: Dict[str, Any], *,
     requested = [(metric, threshold) for metric, threshold in requested if threshold is not None]
 
     if not requested:
-        return {"ok": False, "verdicts": [], "checked": 0,
-                "failures": ["没有给出任何阈值（min_recall / min_mrr 全为 None）："
-                             "阈值判定无定义，按失败处理"]}
+        return {
+            "ok": False,
+            "verdicts": [],
+            "checked": 0,
+            "failures": ["没有给出任何阈值（min_recall / min_mrr 全为 None）：阈值判定无定义，按失败处理"],
+        }
 
     labeled_count = report.get("labeled_count")
     if not isinstance(labeled_count, int) or labeled_count <= 0:
-        return {"ok": False, "verdicts": [], "checked": 0,
-                "failures": [f"评测集没有可用标注（labeled_count={labeled_count!r}）："
-                             "recall@k 与 MRR 都无定义——标注缺失按失败处理，"
-                             "不按「无可漏项」记满分"]}
+        return {
+            "ok": False,
+            "verdicts": [],
+            "checked": 0,
+            "failures": [
+                f"评测集没有可用标注（labeled_count={labeled_count!r}）："
+                "recall@k 与 MRR 都无定义——标注缺失按失败处理，"
+                "不按「无可漏项」记满分"
+            ],
+        }
 
     for metric, threshold in requested:
         limit = _as_finite_float(threshold)
@@ -239,14 +254,14 @@ def judge_quality(report: Dict[str, Any], *,
             continue
         measured = _as_finite_float(report.get(metric))
         if measured is None:
-            failures.append(f"被测量 {metric} 不存在或不是有限实数（实际 {report.get(metric)!r}）："
-                            f"无从与阈值 {limit} 比较，按失败处理")
+            failures.append(
+                f"被测量 {metric} 不存在或不是有限实数（实际 {report.get(metric)!r}）："
+                f"无从与阈值 {limit} 比较，按失败处理"
+            )
             continue
         passed = measured + EPS >= limit
         verdicts.append({"metric": metric, "threshold": limit, "value": measured, "ok": passed})
         if not passed:
-            failures.append(f"{metric}={measured:.4f} < 阈值 {limit:.4f}"
-                            f"（标注 {labeled_count} 条查询，未达标）")
+            failures.append(f"{metric}={measured:.4f} < 阈值 {limit:.4f}（标注 {labeled_count} 条查询，未达标）")
 
-    return {"ok": bool(verdicts) and not failures, "verdicts": verdicts,
-            "checked": len(verdicts), "failures": failures}
+    return {"ok": bool(verdicts) and not failures, "verdicts": verdicts, "checked": len(verdicts), "failures": failures}

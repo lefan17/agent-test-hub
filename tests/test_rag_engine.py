@@ -3,18 +3,36 @@
 这些用例是「正确实现应全绿」的对照组：同一套断言在缺陷开关开启时必然失败，
 在 CORRECT_BUGS（全部 False）下必须全部通过——这就是「检索质量可回归」的基线。
 """
+
 from __future__ import annotations
 
 import pytest
 
-from agenttest.tools.rag_metrics import (LABELED_QUERIES, build_report, check_rank_monotonic,
-                                         check_tie_by_doc_id, doc_ids_of, find_duplicate_hits,
-                                         mean_reciprocal_rank, recall_at_k, reciprocal_rank)
-from demo_app.rag import (CORRECT_BUGS, DEFAULT_CORPUS, DOC_TIE_A, DOC_TIE_B, RAG_BUGS,
-                          RAG_MAX_TOP_K, RagService, tokenize)
+from agenttest.tools.rag_metrics import (
+    LABELED_QUERIES,
+    build_report,
+    check_rank_monotonic,
+    check_tie_by_doc_id,
+    doc_ids_of,
+    find_duplicate_hits,
+    mean_reciprocal_rank,
+    recall_at_k,
+    reciprocal_rank,
+)
+from demo_app.rag import (
+    CORRECT_BUGS,
+    DEFAULT_CORPUS,
+    DOC_TIE_A,
+    DOC_TIE_B,
+    RAG_BUGS,
+    RAG_MAX_TOP_K,
+    RagService,
+    tokenize,
+)
 
 
 # ---------- 分词 ----------
+
 
 def test_ascii_words_are_lowercased():
     assert tokenize("BM25 Ranking") == ["bm25", "ranking"]
@@ -39,6 +57,7 @@ def test_mixed_text_splits_by_script():
 
 
 # ---------- BM25 后端（正确实现）----------
+
 
 @pytest.fixture()
 def engine():
@@ -100,6 +119,7 @@ def test_top_k_limits_hits(engine):
 
 # ---------- 索引一致性 ----------
 
+
 def test_correct_engine_drops_deleted_document(engine):
     assert engine.remove_doc("DOC-CN-002") is True
     assert engine.index_size() == engine.size()
@@ -108,17 +128,16 @@ def test_correct_engine_drops_deleted_document(engine):
 
 def test_correct_engine_updates_document_text(engine):
     assert engine.update_doc("DOC-CN-002", "全新的内容只有这一个词") is True
-    assert engine.search("向量数据库", 5) == [] or \
-        doc_ids_of(engine.search("向量数据库", 5))[0] != "DOC-CN-002"
+    assert engine.search("向量数据库", 5) == [] or doc_ids_of(engine.search("向量数据库", 5))[0] != "DOC-CN-002"
 
 
 def test_reindex_repairs_index_drift():
     # 缺陷实现：删除文档后索引未同步 —— reindex 应把索引拉回与语料一致
     buggy = RagService()
     buggy.remove_doc("DOC-CN-002")
-    assert buggy.index_size() != buggy.size()   # 已漂移
+    assert buggy.index_size() != buggy.size()  # 已漂移
     buggy.reindex()
-    assert buggy.index_size() == buggy.size()   # 重建后一致
+    assert buggy.index_size() == buggy.size()  # 重建后一致
 
 
 def test_reindex_increments_version(engine):
@@ -127,6 +146,7 @@ def test_reindex_increments_version(engine):
 
 
 # ---------- 缺陷实现（钉住当前行为）----------
+
 
 def test_buggy_engine_fails_chinese_recall():
     assert RagService().search("向量数据库", 5) == []
@@ -150,8 +170,8 @@ def test_buggy_engine_emits_duplicate_hits():
 
 def test_buggy_engine_reports_loose_contract():
     service = RagService()
-    assert service.validate_search("", "1") == (1, "")       # 空 q 未报错
-    assert service.validate_search("x", "0")[1] == ""        # 非法 top_k 未报错
+    assert service.validate_search("", "1") == (1, "")  # 空 q 未报错
+    assert service.validate_search("x", "0")[1] == ""  # 非法 top_k 未报错
     assert RagService(bugs=CORRECT_BUGS).validate_search("", "1")[1]
 
 
@@ -164,9 +184,14 @@ def test_buggy_engine_keeps_ghost_hit():
 
 # ---------- 可选 embedding 后端（缺 Key 时优雅降级）----------
 
+
 def test_embedding_backend_degrades_without_key(monkeypatch):
-    for name in ("AGENTTEST_EMBEDDING_API_KEY", "AGENTTEST_EMBEDDING_BASE_URL",
-                 "AGENTTEST_LLM_API_KEY", "AGENTTEST_LLM_BASE_URL"):
+    for name in (
+        "AGENTTEST_EMBEDDING_API_KEY",
+        "AGENTTEST_EMBEDDING_BASE_URL",
+        "AGENTTEST_LLM_API_KEY",
+        "AGENTTEST_LLM_BASE_URL",
+    ):
         monkeypatch.delenv(name, raising=False)
     service = RagService(bugs=CORRECT_BUGS, backend="embedding")
     assert service.backend.name == "bm25"
@@ -208,14 +233,12 @@ def test_reciprocal_rank_ignores_the_rank_field_claimed_by_the_service():
     顺序缺陷都会污染它。若 RR 采信它，排序缺陷发生时 RR 反而显示 1.0，把缺陷盖掉。
     """
     # 返回顺序是 B 在前、A 在后，但两个 hit 都把 rank 谎报成 1
-    lying = [{"doc_id": "B", "score": 1.0, "rank": 1},
-             {"doc_id": "A", "score": 1.0, "rank": 1}]
-    assert reciprocal_rank(lying, ["A"]) == pytest.approx(0.5)   # 按位置：第 2 位
-    assert reciprocal_rank(lying, ["B"]) == pytest.approx(1.0)   # 按位置：第 1 位
+    lying = [{"doc_id": "B", "score": 1.0, "rank": 1}, {"doc_id": "A", "score": 1.0, "rank": 1}]
+    assert reciprocal_rank(lying, ["A"]) == pytest.approx(0.5)  # 按位置：第 2 位
+    assert reciprocal_rank(lying, ["B"]) == pytest.approx(1.0)  # 按位置：第 1 位
 
     # rank 被整体倒序写（rank 5 的其实排在第一）时，也按位置算
-    reversed_ranks = [{"doc_id": "A", "score": 9.0, "rank": 5},
-                      {"doc_id": "B", "score": 1.0, "rank": 1}]
+    reversed_ranks = [{"doc_id": "A", "score": 9.0, "rank": 5}, {"doc_id": "B", "score": 1.0, "rank": 1}]
     assert reciprocal_rank(reversed_ranks, ["B"]) == pytest.approx(0.5)
 
     # rank 缺失或为 None 时同样按位置，而不是退回 1.0
@@ -230,8 +253,7 @@ def test_mean_reciprocal_rank_averages():
 
 def test_build_report_aggregates_per_query():
     report = build_report(
-        [{"q": "q1", "relevant": ["A"], "hits": HITS},
-         {"q": "q2", "relevant": ["C"], "hits": []}],
+        [{"q": "q1", "relevant": ["A"], "hits": HITS}, {"q": "q2", "relevant": ["C"], "hits": []}],
         k=3,
     )
     assert report["query_count"] == 2
@@ -249,14 +271,13 @@ def test_recall_at_k_without_labels_is_zero():
 def test_build_report_excludes_unlabeled_queries_from_average():
     """无标注查询不参与宏平均：既不计满分，也不计 0 分去拉低整体指标。"""
     report = build_report(
-        [{"q": "labeled", "relevant": ["A"], "hits": HITS},
-         {"q": "unlabeled", "relevant": [], "hits": HITS}],
+        [{"q": "labeled", "relevant": ["A"], "hits": HITS}, {"q": "unlabeled", "relevant": [], "hits": HITS}],
         k=3,
     )
-    assert report["query_count"] == 2            # 仍然如实报告查询总数
+    assert report["query_count"] == 2  # 仍然如实报告查询总数
     assert report["labeled_count"] == 1
     assert report["unlabeled_count"] == 1
-    assert report["recall_at_k"] == pytest.approx(1.0)   # 只由有标注的那条决定
+    assert report["recall_at_k"] == pytest.approx(1.0)  # 只由有标注的那条决定
     assert report["mrr"] == pytest.approx(1.0)
     assert report["per_query"][1]["labeled"] is False
 
@@ -293,11 +314,16 @@ def test_find_duplicate_hits():
 
 def test_labeled_query_set_reproduces_documented_metrics():
     """文档里写死的 recall@5 / MRR 数值必须能由 LABELED_QUERIES 复现（防止文档与代码漂移）。"""
+
     def metrics(bugs):
         service = RagService(bugs=bugs)
         return build_report(
-            [{"q": item["q"], "relevant": item["relevant"], "hits": service.search(item["q"], 5)}
-             for item in LABELED_QUERIES], k=5)
+            [
+                {"q": item["q"], "relevant": item["relevant"], "hits": service.search(item["q"], 5)}
+                for item in LABELED_QUERIES
+            ],
+            k=5,
+        )
 
     defect = metrics(RAG_BUGS)
     correct = metrics(CORRECT_BUGS)
