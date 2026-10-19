@@ -30,6 +30,14 @@ include = ["agenttest*", "demo_app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# `llm_smoke` 标记 = 真的会调外部 LLM API 的冒烟用例（见 tests/test_llm_smoke.py）。
+# 它们**不在** PR 门禁里跑：贵（按 PR 数烧额度）、慢且不确定（LLM 延迟让 PR 反馈时间
+# 不可预测），而且验证的是「外部 provider 今天还认不认我们的提示词与结构化输出协议」，
+# 不是「这个 diff 有没有引入错误」。合理频率是发版前 / 换模型时 / 每月一次，
+# 入口是 .github/workflows/llm-smoke.yml（只挂 workflow_dispatch，无定时）。
+markers = [
+  "llm_smoke: 真实 LLM 链路冒烟，PR 门禁不跑（需要 AGENTTEST_LLM_API_KEY）",
+]
 
 # ---------------------------------------------------------------------------
 # 静态类型检查（CI 的 lint job 与 .pre-commit-config.yaml 的 mypy hook 同用这一份）

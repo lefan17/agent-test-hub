@@ -1,0 +1,93 @@
+name: LLM 冒烟（真实 provider）
+
+# 为什么这个 workflow **只**挂 workflow_dispatch，没有 push / PR / schedule 触发：
+#
+#   1. 贵：每条用例至少一次「规划」+ 一次「归因」两次真实 LLM 调用，按 PR 数烧额度；
+#   2. 慢且不确定：LLM 延迟会让 PR 反馈时间变得不可预测，而 PR 门禁的价值一半在于快；
+#   3. 它验证的东西不一样：主 CI（test.yml）问「这个 diff 有没有引入错误」，
+#      这里问「外部 provider 今天还认不认我们的提示词与结构化输出协议」。
+#      后者的合理频率是**发版前 / 换模型时 / 每月一次**，不是每次 push。
+#
+# 反面教材就在本仓库的历史里：一个挂在 PR 上、又贵又不稳定的检查，最后一定会被
+# 改成 continue-on-error 或者被绕过，那时它比没有检查更坏 —— 因为它会让人以为有保护。
+#
+# 触发方式：Actions → 「LLM 冒烟（真实 provider）」→ Run workflow。
+# 需要仓库 secret `LLM_API_KEY`（Settings → Secrets and variables → Actions）。
+# 没配 secret 时 workflow 会在第一个 step 明确失败并打印怎么配，而不是静默跳过。
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "模型名（留空则用 tests 里 config 的默认值）"
+        required: false
+        default: ""
+      base_url:
+        description: "OpenAI 兼容端点（留空则用官方默认）"
+        required: false
+        default: ""
+
+concurrency:
+  # 冒烟花钱，同一个人连点两次按钮不该并发跑两遍
+  group: llm-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  llm-smoke:
+    name: 真实 LLM 全链路冒烟
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov
+
+      - name: 检查 secret 是否配置
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [ -z "$LLM_API_KEY" ]; then
+            echo "::error::仓库 secret LLM_API_KEY 未配置。"
+            echo "请到 Settings → Secrets and variables → Actions → New repository secret 添加它，"
+            echo "名字必须是 LLM_API_KEY。这是**显式失败**而不是跳过："
+            echo "一个静默跳过的冒烟等于没有冒烟，点按钮的人会以为跑过了。"
+            exit 1
+          fi
+
+      - name: 跑 LLM 冒烟（结构契约，不判结果好坏）
+        env:
+          AGENTTEST_LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          AGENTTEST_LLM_MODEL: ${{ inputs.model }}
+          AGENTTEST_LLM_BASE_URL: ${{ inputs.base_url }}
+        run: |
+          python -m pytest tests/test_llm_smoke.py -v -o addopts= -m llm_smoke
+
+      - name: 摘要
+        if: always()
+        run: |
+          {
+            echo "## LLM 冒烟结果"
+            echo ""
+            echo "这个 job 验证的是**链路还通不通**，不是用例质量："
+            echo ""
+            echo "- 全链路退出码 0、报告真的落盘"
+            echo "- \`brain_name == 'llm'\` 且 \`brain_fallback_reason\` 为空（没静默降级）"
+            echo "- 缺陷 \`category\` 落在模型定义的六个枚举内"
+            echo "- \`related_case_ids\` 每一条都来自本次真实失败集（LLM 编造的 id 被丢弃）"
+            echo ""
+            echo "模型：\`${{ inputs.model || 'config 默认' }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

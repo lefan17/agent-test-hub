@@ -8,7 +8,9 @@
 >
 > 🧪 **配套实践项目**：[software-testing-practice](https://github.com/lefan17/software-testing-practice) —— 契约驱动的接口自动化测试实践：Flask 被测系统 + 27 条登录接口 pytest 用例 + 用例设计/测试报告/SQL 数据校验文档（测试基本功配套仓库）
 >
-> ✅ **CI**：[![AgentTest Hub CI](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml/badge.svg)](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml) —— 6 个 job（测试+覆盖率门槛 / mypy+ruff / 容器构建冒烟 / 依赖漏洞扫描 / 提交规范 / 失败通知），触发于 `push` / `pull_request` / 每周夜间回归 `schedule` / `workflow_dispatch`，见 `.github/workflows/test.yml`
+> ✅ **CI**：[![AgentTest Hub CI](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml/badge.svg)](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml) —— 6 个 job（测试+覆盖率双门槛 / mypy+ruff / 容器构建冒烟 / 依赖漏洞扫描 / 提交规范 / 失败通知），触发于 `push` / `pull_request` / 每周夜间回归 `schedule` / `workflow_dispatch`，见 `.github/workflows/test.yml`。
+>
+> 🤖 **LLM 冒烟**：[llm-smoke.yml](.github/workflows/llm-smoke.yml)（**只挂 `workflow_dispatch`**，不进 PR 门禁）—— 真跑一次真实 provider 的规划+归因链路，断言结构契约而非结果好坏，理由见下文「真实 LLM 冒烟：为什么它不在 PR 门禁里」
 >
 > 🐳 **容器化**：`docker compose --profile app up`（起被测系统）/ `--profile test up`（跑测试+覆盖率门槛）
 >
@@ -51,6 +53,7 @@
 | 容器化 | `Dockerfile`、`docker-compose.yml` | `docker compose --profile app up --build` / `--profile test up --build` |
 | 覆盖率门槛（仓库级） | `pyproject.toml [tool.coverage.report]`、CI `test` job | `--cov=agenttest --cov=demo_app --cov-fail-under=70` |
 | 覆盖率门槛（**每文件**） | `[tool.coverage.perfile]`、`scripts/check_coverage.py`、CI 独立一步 | `python scripts/check_coverage.py` → 逐文件判 `fail_under`；拦得住「单点失守」，仓库级拦不住 |
+| LLM 链路冒烟 | `tests/test_llm_smoke.py`、`.github/workflows/llm-smoke.yml` | `pytest -m llm_smoke` → 真调 provider 跑全链路；**不进 PR 门禁**（贵/慢/判据不同），只手动触发 |
 | 静态类型 | `pyproject.toml [tool.mypy]`、CI `lint` job | `python -m mypy` → `Success: no issues found in 24 source files` |
 | 代码规范 | `pyproject.toml [tool.ruff]`、CI `lint` job、pre-commit | `python -m ruff check .` → `All checks passed!` |
 | 漏洞扫描 | `.github/dependabot.yml`、CI `security` job | `pip-audit -r requirements.lock`（**非阻塞**，理由见下） |
@@ -117,13 +120,51 @@
 | `agenttest/config.py` | **39% → 97.4%** | `tests/test_config.py`：三层优先级（环境变量 > 档案 > 代码默认）逐层验证、dotenv 不覆盖已有变量、非法环境名报错、`llm_configured` 真假两态、`_find_chrome` 的路径有效性 |
 | `agenttest/tools/ui_tool.py` | **78% → 99.2%** | `tests/test_ui_tool_errors.py`：chrome 非零退出/空输出、无 Chrome 时抛 `UiUnavailableError`、**未实现的断言类型必须判失败**（两个后端各测一遍）、selenium 异常时 driver 仍 quit |
 | `agenttest/tools/spec_tool.py` | **32% → 100%** | `tests/test_spec_tool.py`：缺 `paths`、非法 JSON、非 dict 响应等契约解析异常分支 |
-| `agenttest/brain/llm_brain.py` | **84.3%**（未动） | 联网调用那几行需要真实 API key，留给 `pytest -m llm` 的冒烟用例（手动触发，不进 PR 门禁） |
+| `agenttest/brain/llm_brain.py` | **84.3%**（未动） | 联网调用那几行需要真实 API key，留给 `pytest -m llm_smoke` 的冒烟用例（手动触发，不进 PR 门禁，见下节） |
 
 **为什么这几处值得补，而不是「为凑数字」**：它们共同的特征是**坏了不会有任何一条现有测试变红**。`runner.py` 是极端例子 —— 它 0% 覆盖时，全仓总量仍是 76.88%、稳稳高于 70 那道门。**零覆盖的文件对一个「总量百分比」门禁的贡献是零，所以它对总量门禁完全隐形**：删掉它、写坏它、让它天天抛异常，总量都不动。这正是 per-file 门槛存在的理由，也是「补上它之后总量门禁反而更没用了」的原因（见上表的反推）。
 
 其余模块普遍 80%~100%（`models.py`、`rag_metrics.py`、`graph/*` 均接近满分）。`agenttest/__main__.py` 是 3 行 CLI 薄壳，已在 `[tool.coverage.run] omit` 中排除——单独跑它没有断言价值。
 
 上面这几处都属于「需要外部条件（CLI 子进程 / 特定环境变量 / 联网 / 真实浏览器）才能覆盖」，是**已知缺口而非遗漏**，也正是门槛取 70 而不是 90 的原因：把门槛定到实际够不到的位置，只会逼出「为凑数字而写无意义测试」。
+
+### 真实 LLM 冒烟：为什么它不在 PR 门禁里
+
+`tests/test_llm_smoke.py` 会**真的调外部 LLM API**，跑一次完整链路（规划 → 执行 → 归因 → 报告）。
+它验证的不是「这次改动有没有引入错误」，而是「这条链路在一个真实 provider 上今天还通不通」。
+
+三件事使它不适合当 PR 门禁：**贵**（每条用例至少一次规划 + 一次归因，按 PR 数烧额度）、
+**慢且不确定**（LLM 延迟让 PR 反馈时间不可预测，而 PR 门禁的价值一半在于快）、
+**判据不同**（它问的是外部依赖还认不认我们的提示词与结构化输出协议，合理频率是
+发版前 / 换模型时 / 每月一次）。所以入口只有 `.github/workflows/llm-smoke.yml`，**只挂
+`workflow_dispatch`**（手动点按钮，无定时、无 push/PR 触发）。
+
+反面教材就在本仓历史里：一个挂在 PR 上、又贵又不稳定的检查，最后一定会被改成
+`continue-on-error` 或者被绕过，那时它比没有检查更坏——因为它会让人以为有保护。
+
+**断言的是结构契约，不是结果好坏。** LLM 生成的用例每次都不一样，断言「必须发现 3 个缺陷」
+只会制造随机红灯。这里钉的是「一旦坏了就说明集成断了」的性质：
+
+| 断言 | 坏了意味着什么 |
+| --- | --- |
+| 全链路退出码 0、`report.json` 落盘 | 链路在真实 provider 上已经断了 |
+| `brain_name == "llm"` 且 `brain_fallback_reason` 为空 | 调用失败后静默降级成规则引擎，而报告仍自称 LLM |
+| 用例 `kind` ∈ {api, ui, rag}、`attempts ≥ 1` | 结构化输出退化成自由文本，或用例没真的进 executor |
+| 缺陷 `category` ∈ 六个枚举 | 反序列化路径没把枚举外的值收敛成 `bug` |
+| `related_case_ids` ⊆ 本次真实失败集 | `_resolve_related_case_ids()` 的白名单失效，报告里每个缺陷那栏会变成噪声 |
+
+文件里还有一条**不需要真 Key** 的反向验证 `test_fallback_path_is_visible_when_llm_breaks`：
+它用替身把 `_chat()` 打坏，断言 `last_fallback_reason` 非空。这条的作用是证明上面那句
+「`brain_fallback_reason` 为空」不是永远为真的空断言——如果降级从不写这个字段，
+断言就毫无意义。用假 Key 即可，所以它在任何机器上都真跑，不 skip。
+
+```bash
+export AGENTTEST_LLM_API_KEY=sk-...
+python -m pytest tests/test_llm_smoke.py -v -o addopts= -m llm_smoke
+```
+
+没有 Key 时那 4 条真实用例 **skip（不是 fail）**，全量套件照常绿。CI 上没配 secret 时
+workflow 会在第一个 step **显式失败**并打印怎么配——静默跳过的冒烟等于没有冒烟。
 
 ### 为什么 pip-audit 是非阻塞的
 
@@ -142,21 +183,21 @@
 
 ## 测试套件
 
-采集数 **316**（不含 UI 时 312 = 297 passed + 15 xfailed；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（Python 3.12.10）：
+采集数 **321**（不含 UI 时 317 = 302 passed + 15 xfailed，其中 4 条真实 LLM 冒烟无 Key 时 skip；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（Python 3.12.10）：
 
 ```bash
 # 全量（含 UI）：其中 4 条依赖真实浏览器，能启动 Chrome 子进程时全部通过
 # （在禁止创建子进程的环境里这 4 条会失败，与代码无关，故 CI 那一步设了 continue-on-error）
-.venv/Scripts/python.exe -m pytest -q            # 301 passed, 15 xfailed
+.venv/Scripts/python.exe -m pytest -q            # 302 passed, 4 skipped, 15 xfailed
 
 # 不含 UI：CI 的阻塞口径
-.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 297 passed, 15 xfailed, 0 failed
+.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 302 passed, 4 skipped, 15 xfailed, 0 failed
 
 # 带覆盖率门槛（CI test job 同一条命令）
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing \
     --cov-report=json:.coverage.json --cov-fail-under=70
-#   → 297 passed, 15 xfailed, 1 warning；TOTAL 1504 stmts / 420 branch = 91.16% ~ 91.27%
+#   → 302 passed, 4 skipped, 15 xfailed；TOTAL 1504 stmts / 420 branch = 91.16% ~ 91.27%
 #   → Required test coverage of 70.0% reached.
 
 # per-file 门禁（读上一条命令产出的 .coverage.json）
@@ -165,7 +206,7 @@
 #   → [coverage-perfile] 通过：所有参与判定的文件都不低于 60%
 ```
 
-> `-o addopts=` 不能省：`pyproject.toml` 里 `addopts = "-q"`，而 `-q` 会把末尾的 `297 passed, ...` 汇总行一起吞掉；命令行覆盖为空之后计数才会出现在输出与 CI 日志里。
+> `-o addopts=` 不能省：`pyproject.toml` 里 `addopts = "-q"`，而 `-q` 会把末尾的 `302 passed, ...` 汇总行一起吞掉；命令行覆盖为空之后计数才会出现在输出与 CI 日志里。
 
 | 文件 | 条数 | 覆盖 |
 | --- | --- | --- |
@@ -181,6 +222,7 @@
 | `tests/test_mock_brain.py` | 7 | 规划与归因 |
 | `tests/test_report.py` | 3 | 报告渲染（含「降级必须在报告里可见」） |
 | `tests/test_runner_e2e.py` | 1 | 端到端（必须发现 contract+bug 缺陷）。**注意：它绕过 runner 直接调 `graph.invoke`，所以它不能证明 CLI 能用** —— CLI 那层的证明在 `test_runner_cli.py` |
+| `tests/test_llm_smoke.py` | **5**（4 条需真 Key，无 Key 时 skip） | 真实 LLM 链路冒烟（2026-10-19 补）：全链路退出码、报告 `brain_name` 与 `brain_fallback_reason`、缺陷 `category` 落在六个枚举内、`related_case_ids` 来自本次真实失败集。断言**结构契约**而非结果好坏——LLM 内容每次都变，断言「必须发现 3 个缺陷」只会制造随机红灯。另有一条不需要 Key 的反向验证（打坏 `_chat()` 证明降级标记可见），它同时证明上面那些断言不是空断言 |
 | `tests/test_runner_cli.py` | **27** | `runner.py` 的 CLI 级测试（2026-10-18 补）：`parse_args` 的每个 flag 与非法值、`pick_brain` 的三种分支、`wait_for_health` 的超时与重试、`DemoServer` 生命周期与端口解析报错、`main()` 返回 0/1 两条退出路径。这一层原先 0% 覆盖 |
 | `tests/test_config.py` | **40** | `config.py` 的三层优先级（环境变量 > 档案 > 代码默认）逐层验证、dotenv 不覆盖已有变量、非法环境名报错、`llm_configured` 真假两态、`_find_chrome` 的路径有效性（2026-10-18 补） |
 | `tests/test_spec_tool.py` | **13** | 契约解析的异常分支：缺 `paths`、非法 JSON、非 dict 响应（2026-10-18 补） |
@@ -188,7 +230,7 @@
 | `tests/test_check_coverage_script.py` | **25** | per-file 门禁脚本自身的测试：配置缺失要退出 1 不是静默通过、排除路径写错要报错、失败输出按百分比升序、JSON 里改低 1pp 必须被抓到（2026-10-18 补） |
 | `tests/test_ui_tool.py` | 4 | UI 工具（**需能真正启动的 Chrome**；在禁止创建子进程的环境里这 4 条会失败，与代码无关） |
 
-15 项 xfail 是**缺陷基准**：用 `@pytest.mark.xfail(strict=True)` 包住「断言契约期望行为」的用例——缺陷存在则 xfail，缺陷被修好会 XPASS 报错提醒更新基准。另有「钉住当前实际行为」的用例直接断言缺陷现状。4 条 UI 用例的结果取决于运行环境：本机**装了** Chrome（`C:\Program Files\Google\Chrome\Application\chrome.exe`），能启动 Chrome 子进程时 4 条全部通过（即上面的 301 passed）；在禁止创建子进程的环境里它们会以 failed 收场（例如 `crashpad_client_win.cc:430 OpenProcess: 拒绝访问 (0x5)`），与代码无关，因此 CI 里那条全量命令设了 `continue-on-error`。
+15 项 xfail 是**缺陷基准**：用 `@pytest.mark.xfail(strict=True)` 包住「断言契约期望行为」的用例——缺陷存在则 xfail，缺陷被修好会 XPASS 报错提醒更新基准。另有「钉住当前实际行为」的用例直接断言缺陷现状。4 条 UI 用例的结果取决于运行环境：本机**装了** Chrome（`C:\Program Files\Google\Chrome\Application\chrome.exe`），能启动 Chrome 子进程时 4 条全部通过（即上面的 302 passed）；在禁止创建子进程的环境里它们会以 failed 收场（例如 `crashpad_client_win.cc:430 OpenProcess: 拒绝访问 (0x5)`），与代码无关，因此 CI 里那条全量命令设了 `continue-on-error`。
 
 ## 架构
 
@@ -461,7 +503,7 @@ sequenceDiagram
 │  ├─ report/            # HTML 报告渲染
 │  ├─ config.py / models.py / runner.py   # config.py 含 dev/staging/prod 环境分层
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（316 collected：301 passed + 15 缺陷基准 xfail，其中 4 条 UI 需浏览器）
+├─ tests/                # 项目自身 pytest（321 collected：302 passed + 15 缺陷基准 xfail，其中 4 条 UI 需浏览器、4 条 LLM 冒烟需 Key）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示
 │  ├─ check_commit_msg.py  # 零依赖的 Conventional Commits 校验（无 Node 环境的降级路径）

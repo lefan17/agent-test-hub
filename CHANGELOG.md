@@ -73,19 +73,42 @@
   **本仓有前例**：`ruff format` 曾经长期挂着 COE，后来才被清干净改成阻塞项。
 - **为什么不追 `llm_brain.py` 剩下的 15.7%**：那几行是真实联网调用与结构化解析，
   需要真 API key。它属于「链路通不通」的验证，不属于 PR 门禁，留给手动触发的
-  `pytest -m llm` 冒烟（见下一条待办）。
+  `pytest -m llm_smoke` 冒烟（见下一条新增）。
 - **仓库级 70 为什么没往上抬**：补完测试后总量 91%，70 的余量已经 21pp，
   它现在只剩「拦住大面积同时失守」这一个作用；提高它不会增加单点保护能力，
   单点保护交给 per-file 门禁。两个门禁分工明确，不是一个顶替另一个。
 
-### 待办（需要真实 LLM Key，等提供后执行）
+### 新增（2026-10-19：真实 LLM 冒烟，把「链路还通不通」从口头承诺变成可执行断言）
 
-- `tests/test_llm_smoke.py`：`pytest.mark.llm` + 无 key 自动 skip，
-  断言**结构契约**而非结果好坏（流程返回 0 且 `report.json` 存在、
-  `defects[].kind` 落在六类内、`related_case_ids` 全来自真实白名单、不出现降级标记）。
-- `.github/workflows/llm-smoke.yml`：`workflow_dispatch` 手动触发，**不进 PR 门禁**
-  （贵 / 慢且不确定 / 它验证的是「链路在真实 provider 上还通不通」而不是
-  「这次改动有没有错」）。
+**为什么它与主 CI 分开。** 主 CI 问的是「这个 diff 有没有引入错误」，冒烟问的是
+「这条链路在一个真实 provider 上今天还通不通」。后者**贵**（每条用例至少一次规划 +
+一次归因两次真实调用，按 PR 数烧额度）、**慢且不确定**（LLM 延迟让 PR 反馈时间不可
+预测，而 PR 门禁的价值一半在于快）、**判据也不同**。合理频率是发版前 / 换模型时 /
+每月一次，所以只挂 `workflow_dispatch`，无定时、无 push/PR 触发。
+
+反面教材就在本仓历史里：一个挂在 PR 上、又贵又不稳定的检查，最后一定会被改成
+`continue-on-error` 或者被绕过 —— `ruff format` 就是这么被废掉过一次的。
+
+- `tests/test_llm_smoke.py`（5 条）：4 条真实链路 + 1 条**不需要 Key** 的反向验证。
+  断言的是**结构契约而非结果好坏** —— LLM 生成的用例每次都不同，断言「必须发现 3 个缺陷」
+  只会制造一个随机红灯。具体钉住：全链路退出码 0 且 `report.json` 落盘；
+  `brain_name == "llm"` 且 `brain_fallback_reason` 为空（静默降级会让报告撒谎，
+  这是本项目一直在防的那类缺陷）；用例 `kind` ∈ {api, ui, rag} 且 `attempts ≥ 1`
+  （结构化输出退化成自由文本、或用例没真的进 executor 都会在这里露出来）；
+  缺陷 `category` 落在六个枚举内（反向验证 `Literal` 约束在 JSON 反序列化路径上真的生效）；
+  `related_case_ids` 每条都来自本次真实失败集（钉 `_resolve_related_case_ids()` 的白名单）。
+- **那条不需要 Key 的反向验证**（`test_fallback_path_is_visible_when_llm_breaks`）用替身
+  把 `_chat()` 打坏，断言 `last_fallback_reason` 非空。它的作用是证明上面那句
+  「`brain_fallback_reason` 为空」不是永远为真的空断言 —— 如果降级从不写这个字段，
+  那条断言就毫无意义。它用假 Key 即可，所以在任何机器上都真跑、不 skip。
+- `.github/workflows/llm-smoke.yml`：只挂 `workflow_dispatch`，带 `model` / `base_url`
+  两个输入。**没配 secret `LLM_API_KEY` 时第一个 step 显式失败并打印怎么配**，
+  而不是静默跳过 —— 一个静默跳过的冒烟等于没有冒烟，点按钮的人会以为跑过了。
+- `pyproject.toml` 注册 `llm_smoke` marker（没有这条会出 `PytestUnknownMarkWarning`，
+  而一个没人能过滤的 marker 等于没有 marker）。
+
+**无 Key 时的行为**：那 4 条 skip（不是 fail），全量套件照常绿（302 passed, 4 skipped,
+15 xfailed）。收集数从 316 涨到 321。
 
 ### 新增
 
