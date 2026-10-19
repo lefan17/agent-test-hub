@@ -18,6 +18,7 @@
     "/api/login": {
       "post": {
         "summary": "登录获取 token",
+        "description": "演示环境的固定凭据：username 任意非空，password 必须为 123456。",
         "requestBody": {
           "required": true,
           "content": {
@@ -25,8 +26,10 @@
               "schema": {
                 "type": "object",
                 "required": ["username", "password"],
-                "properties": { "username": { "type": "string" }, "password": { "type": "string" } }
-              }
+                "properties": { "username": { "type": "string" }, "password": { "type": "string" } },
+                "example": { "username": "admin", "password": "123456" }
+              },
+              "example": { "username": "admin", "password": "123456" }
             }
           }
         },

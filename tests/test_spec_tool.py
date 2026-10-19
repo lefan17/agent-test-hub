@@ -90,6 +90,52 @@ class TestSummarizeSpec:
         }
         assert "requestBody" in summarize_spec(spec)
 
+    def test_request_body_example_reaches_the_summary(self):
+        """请求体示例值必须出现在摘要里，否则 LLM 只能猜输入。
+
+        真实故障现场：登录接口的凭据只在契约示例里，摘要只写 `requestBody`
+        三个字时，真 LLM 把 password 填成 `"password"` 字面量，拿到 401 后
+        归因出一个「鉴权链路异常」的缺陷 —— 那个缺陷不存在，是信息缺口造成的幻觉。
+        """
+        spec = {
+            "info": {"title": "t", "version": "1"},
+            "paths": {
+                "/api/login": {
+                    "post": {
+                        "responses": {"200": {}},
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "username": {"type": "string"},
+                                            "password": {"type": "string"},
+                                        },
+                                    },
+                                    "example": {"username": "admin", "password": "123456"},
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        text = summarize_spec(spec)
+        assert "username:string" in text
+        assert "password:string" in text
+        assert "123456" in text, "示例值没进摘要，LLM 就不知道正确的输入长什么样"
+
+    def test_request_body_without_schema_falls_back_to_bare_marker(self):
+        """没有 schema 时不能崩，也不能凭空编字段 —— 退回纯 `requestBody`。"""
+        spec = {
+            "info": {"title": "t", "version": "1"},
+            "paths": {"/x": {"post": {"responses": {"201": {}}, "requestBody": {"content": {}}}}},
+        }
+        text = summarize_spec(spec)
+        assert "requestBody" in text
+        assert "{" not in text.split("requestBody")[1], "没有 schema 时不该长出字段列表"
+
     def test_summary_text_is_appended_in_parentheses(self):
         spec = {
             "info": {"title": "t", "version": "1"},
