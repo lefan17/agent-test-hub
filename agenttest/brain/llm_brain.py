@@ -31,7 +31,15 @@ SYSTEM_PLAN_PROMPT = """你是一名资深测试工程师兼 Agent 架构师，�
    / rag_rank_monotonic / rag_tie_by_doc_id / rag_no_duplicate / rag_recall_at_least（配 threshold）
    / rag_mrr_at_least / rag_no_ghost_hit；related 标注文档用 rag_relevant；
 5. 契约里写明的状态码要与实现核对——如果怀疑实现不符，也要生成对应契约用例来验证；
-6. 输出 12~20 条用例，id 用 API-xxx / UI-xxx / RAG-xxx 编号，优先级 P0/P1/P2。"""
+6. 输出 12~20 条用例，id 用 API-xxx / UI-xxx / RAG-xxx 编号，优先级 P0/P1/P2；
+7. **字段字面量必须短**：body / query 里任何字符串都不许超过 200 字符。要测超长输入时，
+   写一个有代表性的短值（例如 "A" * 256 就写 256 个 A），不要原样铺开几千字符——
+   那会把你的输出顶到 token 上限，JSON 被截断后整份计划都会作废；
+8. **checks 只在真需要额外断言时才写**：状态码已经由 expected_status 校验，绝大多数 API
+   用例的 checks 应当留空数组 `[]`。API 用例只认 `contains_text`（配 target，在响应体里找
+   子串）；`rag_*` 系列（含 rag_status）是 RAG 用例专用，写进 API 用例会被执行器判为
+   「不支持的断言类型」而直接失败——那不是发现了缺陷，是用例写错了。"""
+
 
 SYSTEM_ANALYSIS_PROMPT = """你是一名资深测试工程师。以下是自动化测试失败用例的执行结果：
 {results}
@@ -143,6 +151,9 @@ class LLMBrain:
         self.api_key = cfg.llm_api_key
         self.base_url = cfg.llm_base_url or None
         self.model = cfg.llm_model
+        # 结构化输出的落地方式。默认 function_calling 而不是 LangChain 的默认 json_schema：
+        # DeepSeek 对 response_format=json_schema 直接回 400。见 _structured() 的注释。
+        self.structured_method = cfg.llm_structured_method
         # 最近一次降级到 MockBrain 的原因；空串表示这一轮真的走了 LLM。
         # 报告层靠它避免把"降级后的规则引擎输出"标成"真实 LLM"。
         self.last_fallback_reason = ""
@@ -158,11 +169,29 @@ class LLMBrain:
             timeout=60,
         )
 
+    def _structured(self, schema):
+        """把 LLM 绑到给定 schema，显式指定结构化输出的落地方式。
+
+        **必须显式传 method**，这是踩出来的：LangChain 0.3.x 的默认值是
+        `json_schema`，它发出的 `response_format` 是 pydantic 类的 JSON Schema；
+        而 DeepSeek 的 OpenAI 兼容层不认这个类型，直接回 400
+        `This response_format type is unavailable now`。
+
+        三条路的实测结果（deepseek-chat，2026-10-19）：
+        - `function_calling` 通 —— 走 tools/tool_choice，DeepSeek 支持；
+        - `json_schema`    400 —— 就是上面那个报错；
+        - `json_mode`      400 —— 它还额外要求 prompt 里出现 "json" 字样。
+
+        所以默认值是 function_calling。换成别的 provider 时如果它更擅长
+        `json_schema`，把它设回 `json_schema` 即可（配置项见 Config）。
+        """
+        return self._chat().with_structured_output(schema, method=self.structured_method)
+
     def make_plan(self, goal: str, spec: Dict[str, Any], context: Dict[str, Any]) -> List[TestCase]:
         prompt = SYSTEM_PLAN_PROMPT.format(spec=summarize_spec(spec))
         user = f"目标：{goal}\n被测系统地址：{context.get('base_url')}\n请生成测试计划。"
         try:
-            llm = self._chat().with_structured_output(_PlanResult)
+            llm = self._structured(_PlanResult)
             out = llm.invoke([{"role": "system", "content": prompt}, {"role": "user", "content": user}])
         except Exception as exc:
             return self._fallback_plan(context, f"LLM 调用失败（{type(exc).__name__}: {exc}）")
@@ -202,6 +231,27 @@ class LLMBrain:
         failed = [r for r in results if not r.ok]
         if not failed:
             return []
+        # 用例自己写错导致的失败，先本地归因成 test_issue 拿走，不能让 LLM 去猜：
+        # 它看不到「断言类型与用例类型不匹配」这个事实，只会照着 error 文本编出一个
+        # 看起来很像被测缺陷的结论，而 category 一旦写成 bug，报告就多一个不存在的缺陷。
+        invalid = [r for r in failed if r.invalid_case]
+        failed = [r for r in failed if not r.invalid_case]
+        defects: List[Defect] = [
+            Defect(
+                id=f"DEF-{i:03d}",
+                title="用例本身不成立：断言类型与该用例类型不匹配",
+                severity="low",
+                category="test_issue",
+                endpoint=f"{r.kind.upper()} {r.title}",
+                evidence=f"期望 {r.expected}；{r.error}",
+                suggestion="修正用例的 checks：API 用例只认 contains_text / title_contains / "
+                "has_element，rag_* 系列断言只能用在 kind=rag 的用例上",
+                related_case_ids=[r.case_id],
+            )
+            for i, r in enumerate(invalid, start=1)
+        ]
+        if not failed:
+            return defects
         payload = [
             {
                 "case_id": r.case_id,
@@ -216,12 +266,13 @@ class LLMBrain:
         ]
         prompt = SYSTEM_ANALYSIS_PROMPT.format(results=json.dumps(payload, ensure_ascii=False, indent=2))
         try:
-            llm = self._chat().with_structured_output(_AnalysisResult)
+            llm = self._structured(_AnalysisResult)
             out = llm.invoke([{"role": "system", "content": prompt}])
         except Exception as exc:
-            return self._fallback_defects(results, context, f"LLM 归因调用失败（{type(exc).__name__}: {exc}）")
-        defects = []
-        for i, d in enumerate(out.defects or [], start=1):
+            return defects + self._fallback_defects(
+                results, context, f"LLM 归因调用失败（{type(exc).__name__}: {exc}）"
+            )
+        for i, d in enumerate(out.defects or [], start=len(defects) + 1):
             defects.append(
                 Defect(
                     id=f"DEF-{i:03d}",

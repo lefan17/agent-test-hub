@@ -82,6 +82,11 @@ class Config:
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_model: str = "deepseek-chat"
+    # 结构化输出的落地方式，透传给 LangChain 的 with_structured_output(method=...)。
+    # 默认刻意写成 function_calling，而不是 LangChain 自己的默认值 json_schema：
+    # 实测 DeepSeek 对 response_format=json_schema 直接回 400（"This response_format
+    # type is unavailable now"），function_calling 是三条路里唯一通的。
+    llm_structured_method: str = "function_calling"
     ui_backend: str = "auto"  # auto | chrome | selenium
     chrome_path: str = ""
     report_dir: Path = field(default_factory=lambda: Path("reports"))
@@ -135,6 +140,7 @@ class Config:
             llm_api_key=pick("AGENTTEST_LLM_API_KEY"),
             llm_base_url=pick("AGENTTEST_LLM_BASE_URL"),
             llm_model=pick("AGENTTEST_LLM_MODEL", "deepseek-chat"),
+            llm_structured_method=pick("AGENTTEST_LLM_STRUCTURED_METHOD", "function_calling"),
             ui_backend=pick("AGENTTEST_UI_BACKEND", "auto"),
             chrome_path=pick("AGENTTEST_CHROME_PATH"),
             report_dir=Path(pick("AGENTTEST_REPORT_DIR", "reports")),
