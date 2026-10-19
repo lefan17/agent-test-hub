@@ -288,6 +288,26 @@ def test_api_case_with_unknown_check_type_is_not_ok(demo_server_url):
     assert detail["ok"] is False
 
 
+def test_unknown_check_type_is_marked_invalid_not_a_defect(demo_server_url):
+    """写错断言类型的用例必须被标成 invalid_case，否则报告会凭空多一个"缺陷"。
+
+    真实故障现场：LLM 给一条健康检查用例挂了 `rag_status` 断言。请求其实返回了 200，
+    但断言类型在 API 执行器里不存在 —— 如果只判 ok=False 就送去归因，
+    LLM 会照着 error 文本编出一个像样的被测缺陷，而那个缺陷根本不存在。
+    """
+    unknown = Check.model_construct(type="rag_status", target="", doc_ids=[], threshold=0.0)
+    detail = nodes._run_api_case(_api_case(200, [unknown]), demo_server_url)
+    assert detail["ok"] is False
+    assert detail["invalid_case"] is True, "断言类型不存在属于用例写错，必须与真实失败区分开"
+
+
+def test_normal_failure_is_not_marked_invalid(demo_server_url):
+    """反向验证：普通的状态码不符不能被当成"用例写错"，否则真缺陷会被漏报。"""
+    detail = nodes._run_api_case(_api_case(404, []), demo_server_url)
+    assert detail["ok"] is False
+    assert detail["invalid_case"] is False
+
+
 # ---------- 重试退避 ----------
 
 

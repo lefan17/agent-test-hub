@@ -92,6 +92,7 @@ def make_executor(cfg: Config):
                 retried=retried,
                 notes=last_detail.get("notes", []),
                 metrics=last_detail.get("metrics", {}),
+                invalid_case=bool(last_detail.get("invalid_case", False)),
             )
             results.append(result)
             trace.append(
@@ -150,6 +151,7 @@ def _run_api_case(case: TestCase, base_url: str) -> Dict[str, Any]:
     actual = detail.get("status", 0)
     ok = bool(detail.get("ok")) and actual == case.expected_status
     failures: List[str] = []
+    invalid = False
     if not detail.get("ok"):
         failures.append(detail.get("error") or "请求失败")
     elif actual != case.expected_status:
@@ -158,6 +160,8 @@ def _run_api_case(case: TestCase, base_url: str) -> Dict[str, Any]:
         verdict = _eval_api_check(check, detail.get("body"))
         if not verdict["ok"]:
             failures.append(verdict["detail"])
+            # 断言类型不存在 = 用例写错。它不该让整条用例"通过"，但也不能算被测缺陷。
+            invalid = invalid or bool(verdict.get("invalid"))
     return {
         "ok": ok and not failures,
         "status": actual,
@@ -165,6 +169,7 @@ def _run_api_case(case: TestCase, base_url: str) -> Dict[str, Any]:
         "error": "" if (ok and not failures) else "；".join(failures),
         "evidence": f"请求 {case.method} {case.path} -> {actual}，响应体: {_body_snippet(detail.get('body'), 300)}",
         "notes": [f"耗时 {detail.get('time_ms')}ms"],
+        "invalid_case": invalid,
     }
 
 
@@ -180,7 +185,12 @@ def _eval_api_check(check: Check, body: Any) -> Dict[str, Any]:
     if check.type == "has_element":
         found = _has_element(text, check.target)
         return {"ok": found, "detail": f"页面缺少元素 {check.target!r}"}
-    return {"ok": False, "detail": f"API 用例不支持的断言类型 {check.type}"}
+    return {
+        "ok": False,
+        "invalid": True,
+        "detail": f"API 用例不支持的断言类型 {check.type}（该断言只对 RAG/UI 用例有效，"
+        f"属用例本身写错，不计为被测缺陷）",
+    }
 
 
 def _html_title(text: str) -> str:

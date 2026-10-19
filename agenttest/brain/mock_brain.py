@@ -324,7 +324,24 @@ class MockBrain:
             if key in seen:
                 continue
             seen.add(key)
-            if r.actual_status == 0:
+            if r.invalid_case:
+                # 用例本身不成立（例如把 RAG 专用断言写进了 API 用例）。它必须先于下面
+                # 所有业务分支被判掉：请求可能明明成功了，却因为断言类型不存在被记成
+                # FAIL。归因成 bug/contract 会让报告凭空多出一个不存在的被测缺陷。
+                defects.append(
+                    Defect(
+                        id=f"DEF-{len(defects) + 1:03d}",
+                        title="用例本身不成立：断言类型与该用例类型不匹配",
+                        severity="low",
+                        category="test_issue",
+                        endpoint=endpoint,
+                        evidence=f"期望 {r.expected}；{r.error}",
+                        suggestion="修正用例的 checks：API 用例只认 contains_text / title_contains / "
+                        "has_element，rag_* 系列断言只能用在 kind=rag 的用例上",
+                        related_case_ids=[r.case_id],
+                    )
+                )
+            elif r.actual_status == 0:
                 # 没有拿到任何 HTTP 响应（连不上、超时、连接被重置）。这类失败与被测
                 # 逻辑无关，必须先于下面的业务分支判掉：否则「服务根本没起来」会被
                 # 归因成「契约不符」或「召回质量差」，报告把环境故障写成被测缺陷。
