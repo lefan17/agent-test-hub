@@ -48,7 +48,7 @@
 - **CI `test` job 新增独立一步「per-file 覆盖率门禁（拦单点失守）」**，
   `if: always()`、**阻塞**（不是 `continue-on-error`）。独立成步的另一个好处是
   失败信息独立成段，日志里直接看到哪个文件、缺哪些行。
-- **补上四处真缺口**（覆盖率 76.88% → 91.21% ~ 91.32%，新增 138 条用例）：
+- **补上四处真缺口**（覆盖率 76.88% → 91.25%，新增 138 条用例）：
 
   | 文件 | 覆盖 | 新增测试 | 补的是什么 |
   | --- | --- | --- | --- |
@@ -107,8 +107,9 @@
 - `pyproject.toml` 注册 `llm_smoke` marker（没有这条会出 `PytestUnknownMarkWarning`，
   而一个没人能过滤的 marker 等于没有 marker）。
 
-**无 Key 时的行为**：那 4 条 skip（不是 fail），全量套件照常绿（302 passed, 4 skipped,
-15 xfailed）。收集数从 316 涨到 323。
+**无 Key 时的行为**：那 4 条 skip（不是 fail），全量套件照常绿（308 passed, 4 skipped,
+15 xfailed；同一台机器配上 Key 之后是 312 passed, 15 xfailed）。收集数从 316 涨到 327（4 条 LLM 冒烟 + 3 条 `invalid_case` 回归 +
+4 条把 `.env` 从开发机依赖变成显式输入）。
 
 ### 新增
 
