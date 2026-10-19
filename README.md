@@ -42,7 +42,7 @@
 - **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、缺陷证据与截图（截图仅在 UI 用例真正跑通时产生）、以及「本轮是否降级为规则引擎」的显式声明
 - **自带被测系统**：Flask Demo 应用注入 2 个 API 契约缺陷 + 1 处 Flaky 注入 + 6 个 RAG 检索缺陷开关（覆盖 9 个缺陷面），Agent 演示「发现缺陷」而非「跑一遍全绿」
 - **零新增依赖**：RAG 检索默认后端用纯标准库实现 BM25（`demo_app/rag.py`），不引入 rank_bm25 / jieba / numpy 等任何检索库，离线确定性可回归
-- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率双重门槛（仓库级 70% + **per-file 60%**，实测分支覆盖 91.25%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
+- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率双重门槛（仓库级 70% + **per-file 60%**，实测分支覆盖 91.20%~91.25%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
 
 ## 工程化能力
 
@@ -74,7 +74,7 @@
 # 仓库默认配置（pyproject 里 branch = true）
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing
-#   无 Key（= CI 口径，4 条 LLM 冒烟 skip）：TOTAL 1546 stmts / 432 branch = 91.25%
+#   无 Key（= CI 口径，4 条 LLM 冒烟 skip）：TOTAL 1546 stmts / 432 branch = 91.20~91.25%
 #   有 Key（4 条冒烟真跑）：              TOTAL 1546 stmts / 432 branch = 91.91%
 ```
 
@@ -88,15 +88,17 @@
 > 所以两个都写出来：CI 上必然是前一个数，你自己跑出后一个数时不必怀疑看错了。
 >
 > 真正会抖的是 `demo_app/rag.py` 那个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），
-> 命中重试路径时多覆盖或少覆盖几行，同口径重复跑落在 **91.25% ~ 92.01%**。
-> 但**记账一律取最低那一档**（91.25%）：一个区间只能说明测量有抖动，
-> 而这里真正需要说清的是「最低的那个文件离门槛有多远」。
+> 命中重试路径时多覆盖或少覆盖几行。同口径重复跑的实测跨度是
+> **91.20% ~ 92.01%**（下限来自 CI runner 的 91.20%、容器内 91.30%，上限来自本机
+> 连续运行里最顺的一次）—— 所以**记账一律取下限 91.20%**。
+> 一个区间只能说明测量有抖动，而这里真正需要说清的是「最低的那个文件离门槛有多远」，
+> 那件事由下面的 per-file 表回答。
 > 补的是真缺口，不是为凑数字写的空测试 —— 每一处都对应一个「原来没人验证、
 > 坏了也不会有人知道」的行为，细节见下面的「覆盖率短板」表与
 > `tests/test_runner_cli.py` / `tests/test_config.py` / `tests/test_spec_tool.py` /
 > `tests/test_ui_tool_errors.py` 的文件头注释。
 
-**CI 门槛取 70**，理由：低于实测口径（分支覆盖 91.25%），留出约 21pp 的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么——**实测口径，不是估算**：
+**CI 门槛取 70**，理由：低于实测口径（分支覆盖 91.2%），留出约 21pp 的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么——**实测口径，不是估算**：
 
 | 假设的退化 | 反推覆盖率 | 是否击穿 70 |
 | --- | --- | --- |
@@ -215,7 +217,7 @@ workflow 会在第一个 step **显式失败**并打印怎么配——静默跳�
     --cov=agenttest --cov=demo_app --cov-report=term-missing \
     --cov-report=json:.coverage.json --cov-fail-under=70
 #   → 有 Key：308 passed, 15 xfailed；无 Key：304 passed, 4 skipped, 15 xfailed
-#   → TOTAL 1546 stmts / 432 branch = 91.25%（无 Key，CI 口径）/ 91.91%（有 Key）
+#   → TOTAL 1546 stmts / 432 branch = 91.20~91.25%（无 Key，CI 口径）/ 91.91%（有 Key）
 #   → Required test coverage of 70.0% reached.
 
 # per-file 门禁（读上一条命令产出的 .coverage.json）
