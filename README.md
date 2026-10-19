@@ -71,19 +71,26 @@
 实测命令与结果（本机 `.venv`，Python 3.12.10）：
 
 ```bash
-# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1546 stmts / 432 branch = 91.25%
+# 仓库默认配置（pyproject 里 branch = true）
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing
+#   无 Key（= CI 口径，4 条 LLM 冒烟 skip）：TOTAL 1546 stmts / 432 branch = 91.25%
+#   有 Key（4 条冒烟真跑）：              TOTAL 1546 stmts / 432 branch = 91.91%
 ```
 
-> 上面这个 91.25% 是 2026-10-19 补完 `runner.py` / `config.py` / `spec_tool.py` /
+> 上面这两个值都是 2026-10-19 补完 `runner.py` / `config.py` / `spec_tool.py` /
 > `ui_tool.py` 四处缺口、再补上真实 LLM 链路的 4 条冒烟与 3 条 `invalid_case` 回归之后的数字；
 > 补之前是 **76.88%**（1500 stmts / 311 miss）。
-> 它**不是恒定值**：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），
-> 命中重试路径时会多覆盖或少覆盖几行，实测在 **91.21% ~ 92.01%** 之间摆（差 0.8pp）。
-> 这个幅度比门槛余量小一个数量级，不影响任何判定 —— 所以下面统一按 CI 口径的
-> **91.25%** 记账，不再写成区间：一个区间只能说明测量有抖动，而这里真正需要说清的是
-> 「最低的那个文件离门槛有多远」。
+>
+> **为什么是两个数**：覆盖率的分母不变（1546 / 432），变的是分子——无 Key 时那 4 条
+> LLM 冒烟 skip，`agenttest/brain/llm_brain.py` 只有 83.9%；配上 Key 它们真跑一趟，
+> 同一个文件变成 92.7%，总量因此差 0.66pp。**这不是抖动，是可解释的差异**，
+> 所以两个都写出来：CI 上必然是前一个数，你自己跑出后一个数时不必怀疑看错了。
+>
+> 真正会抖的是 `demo_app/rag.py` 那个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），
+> 命中重试路径时多覆盖或少覆盖几行，同口径重复跑落在 **91.25% ~ 92.01%**。
+> 但**记账一律取最低那一档**（91.25%）：一个区间只能说明测量有抖动，
+> 而这里真正需要说清的是「最低的那个文件离门槛有多远」。
 > 补的是真缺口，不是为凑数字写的空测试 —— 每一处都对应一个「原来没人验证、
 > 坏了也不会有人知道」的行为，细节见下面的「覆盖率短板」表与
 > `tests/test_runner_cli.py` / `tests/test_config.py` / `tests/test_spec_tool.py` /
@@ -119,11 +126,11 @@
 
 | 文件 | 覆盖（今） | 补了什么 |
 | --- | --- | --- |
-| `agenttest/runner.py` | **0% → 92.5%** | `tests/test_runner_cli.py`：`parse_args` 每个 flag 与非法值、`pick_brain` 三种分支、`wait_for_health` 超时/重试、`DemoServer` 生命周期、`main` 的 0/1 两条退出路径。这是本轮最重要的一处 —— 它曾经让「主入口整个失效」在 CI 里看不出来 |
+| `agenttest/runner.py` | **0% → 92.7%** | `tests/test_runner_cli.py`：`parse_args` 每个 flag 与非法值、`pick_brain` 三种分支、`wait_for_health` 超时/重试、`DemoServer` 生命周期、`main` 的 0/1 两条退出路径。这是本轮最重要的一处 —— 它曾经让「主入口整个失效」在 CI 里看不出来 |
 | `agenttest/config.py` | **39% → 97.4%** | `tests/test_config.py`：三层优先级（环境变量 > 档案 > 代码默认）逐层验证、dotenv 不覆盖已有变量、非法环境名报错、`llm_configured` 真假两态、`_find_chrome` 的路径有效性 |
 | `agenttest/tools/ui_tool.py` | **78% → 99.2%** | `tests/test_ui_tool_errors.py`：chrome 非零退出/空输出、无 Chrome 时抛 `UiUnavailableError`、**未实现的断言类型必须判失败**（两个后端各测一遍）、selenium 异常时 driver 仍 quit |
 | `agenttest/tools/spec_tool.py` | **32% → 100%** | `tests/test_spec_tool.py`：缺 `paths`、非法 JSON、非 dict 响应等契约解析异常分支 |
-| `agenttest/brain/llm_brain.py` | **84.3%**（未动） | 联网调用那几行需要真实 API key，留给 `pytest -m llm_smoke` 的冒烟用例（手动触发，不进 PR 门禁，见下节） |
+| `agenttest/brain/llm_brain.py` | **84% → 83.9%（无 Key）/ 92.7%（有 Key）** | 联网调用那几行只有真实 provider 能覆盖，交给 `pytest -m llm_smoke` 的 4 条冒烟用例。**同一份代码两个数字，差别就是那 4 条跑不跑**：无 Key 时它们 skip（CI 上必然如此），配了 Key 真跑一趟就多覆盖 13 行 |
 
 **为什么这几处值得补，而不是「为凑数字」**：它们共同的特征是**坏了不会有任何一条现有测试变红**。`runner.py` 是极端例子 —— 它 0% 覆盖时，全仓总量仍是 76.88%、稳稳高于 70 那道门。**零覆盖的文件对一个「总量百分比」门禁的贡献是零，所以它对总量门禁完全隐形**：删掉它、写坏它、让它天天抛异常，总量都不动。这正是 per-file 门槛存在的理由，也是「补上它之后总量门禁反而更没用了」的原因（见上表的反推）。
 
@@ -208,7 +215,7 @@ workflow 会在第一个 step **显式失败**并打印怎么配——静默跳�
     --cov=agenttest --cov=demo_app --cov-report=term-missing \
     --cov-report=json:.coverage.json --cov-fail-under=70
 #   → 有 Key：308 passed, 15 xfailed；无 Key：304 passed, 4 skipped, 15 xfailed
-#   → TOTAL 1546 stmts / 432 branch = 91.25%
+#   → TOTAL 1546 stmts / 432 branch = 91.25%（无 Key，CI 口径）/ 91.91%（有 Key）
 #   → Required test coverage of 70.0% reached.
 
 # per-file 门禁（读上一条命令产出的 .coverage.json）
