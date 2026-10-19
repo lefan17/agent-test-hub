@@ -42,7 +42,7 @@
 - **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、缺陷证据与截图（截图仅在 UI 用例真正跑通时产生）、以及「本轮是否降级为规则引擎」的显式声明
 - **自带被测系统**：Flask Demo 应用注入 2 个 API 契约缺陷 + 1 处 Flaky 注入 + 6 个 RAG 检索缺陷开关（覆盖 9 个缺陷面），Agent 演示「发现缺陷」而非「跑一遍全绿」
 - **零新增依赖**：RAG 检索默认后端用纯标准库实现 BM25（`demo_app/rag.py`），不引入 rank_bm25 / jieba / numpy 等任何检索库，离线确定性可回归
-- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率双重门槛（仓库级 70% + **per-file 60%**，实测分支覆盖 91.16% ~ 91.27%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
+- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率双重门槛（仓库级 70% + **per-file 60%**，实测分支覆盖 91.21% ~ 91.32%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
 
 ## 工程化能力
 
@@ -71,14 +71,14 @@
 实测命令与结果（本机 `.venv`，Python 3.12.10）：
 
 ```bash
-# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1504 stmts / 420 branch = 91.16% ~ 91.27%
+# 仓库默认配置（pyproject 里 branch = true）：TOTAL 1515 stmts / 420 branch = 91.21% ~ 91.32%
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing
 ```
 
-> 上面这个 91.16% ~ 91.27% 是 2026-10-18 补完 `runner.py` / `config.py` / `spec_tool.py` /
+> 上面这个 91.21% ~ 91.32% 是 2026-10-18 补完 `runner.py` / `config.py` / `spec_tool.py` /
 > `ui_tool.py` 四处缺口之后的数字；补之前是 **76.88%**（1500 stmts / 311 miss）。
-> 写成区间是因为它**不写死**：连跑 3 次得到 91.16% / 91.27% / 91.16%，差异来自
+> 写成区间是因为它**不写死**：连跑 3 次得到 91.32% / 91.32% / 91.21%，差异来自
 > `demo_app/rag.py` 那个 10% 概率返回 503 的注入缺陷（`FLAKY-001`）——命中重试路径时
 > 多覆盖 1 行、少 1 行未覆盖。差 0.11pp，比门槛余量小两个数量级，不影响任何判定。
 > 补的是真缺口，不是为凑数字写的空测试 —— 每一处都对应一个「原来没人验证、
@@ -86,7 +86,7 @@
 > `tests/test_runner_cli.py` / `tests/test_config.py` / `tests/test_spec_tool.py` /
 > `tests/test_ui_tool_errors.py` 的文件头注释。
 
-**CI 门槛取 70**，理由：低于实测口径（分支覆盖 91.16% ~ 91.27%），留出约 21pp 的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么——**实测口径，不是估算**：
+**CI 门槛取 70**，理由：低于实测口径（分支覆盖 91.21% ~ 91.32%），留出约 21pp 的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么——**实测口径，不是估算**：
 
 | 假设的退化 | 反推覆盖率 | 是否击穿 70 |
 | --- | --- | --- |
@@ -96,11 +96,11 @@
 | `agenttest/runner.py`（126 行，已覆盖 120）整体失去覆盖 | 84.6% | ❌ 拦不住 |
 | `agenttest/brain/llm_brain.py`（110 行，已覆盖 97）整体失去覆盖 | 86.1% | ❌ 拦不住 |
 
-**这张表在本轮之后几乎全是「拦不住」，这不是退步，是仓库级门槛的固有性质**：分母（1504 语句）越大，单个文件占比越小，任何一个文件整个失守都撼动不了总量。70 这道门现在只剩一个作用——拦住「大面积同时失守」（例如换掉整个 `agenttest/tools/` 目录）。
+**这张表在本轮之后几乎全是「拦不住」，这不是退步，是仓库级门槛的固有性质**：分母（1515 语句）越大，单个文件占比越小，任何一个文件整个失守都撼动不了总量。70 这道门现在只剩一个作用——拦住「大面积同时失守」（例如换掉整个 `agenttest/tools/` 目录）。
 
 真正拦住单点退化的手段是**每文件门槛（per-file gate）**，本轮已经落地：`scripts/check_coverage.py` 读 `--cov-report=json` 的产物，按 `pyproject.toml` 的 `[tool.coverage.perfile]` 逐个文件判。当前的活证据是 `agenttest/runner.py`：它是这套系统的主入口，**原先是 0% 覆盖（126 语句 / 34 分支，missing 10-198 全段），而仓库级 70 这道门照样绿**。把它补到 92.5% 之后，本轮参与判定的 16 个文件最低是 `demo_app/rag.py` 81.1%，于是 per-file 门槛从首轮的 30（刻意只抓 `runner.py` 一个）抬到 **60**。
 
-> 关于抖动：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），它让总量在 **91.16% ~ 91.27%** 之间摆 0.11pp。这个幅度对 70 这道门完全不构成威胁（余量 21pp）。**反倒是上一版配置的风险更大**：当时总量 76.88%、门槛 70，只有 6.9pp 余量，而同一个缺陷的抖动理论上能吃掉其中相当一部分 —— 一个只剩几个百分点余量的门槛，迟早会在某个倒霉的 PR 上间歇性变红，然后被人用重跑糊过去。这也是本轮把测试补齐之后的一个副产品：门槛没变，但它从「刚好够用」变成了「有真实余量」。
+> 关于抖动：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），它让总量在 **91.21% ~ 91.32%** 之间摆 0.11pp。这个幅度对 70 这道门完全不构成威胁（余量 21pp）。**反倒是上一版配置的风险更大**：当时总量 76.88%、门槛 70，只有 6.9pp 余量，而同一个缺陷的抖动理论上能吃掉其中相当一部分 —— 一个只剩几个百分点余量的门槛，迟早会在某个倒霉的 PR 上间歇性变红，然后被人用重跑糊过去。这也是本轮把测试补齐之后的一个副产品：门槛没变，但它从「刚好够用」变成了「有真实余量」。
 
 覆盖率短板（`--cov-report=term-missing` 实测，按缺失语句数排序）——**2026-10-18 之前的表**：
 
@@ -183,21 +183,21 @@ workflow 会在第一个 step **显式失败**并打印怎么配——静默跳�
 
 ## 测试套件
 
-采集数 **321**（不含 UI 时 317 = 298 passed + 4 skipped + 15 xfailed；这 4 条 skipped 就是真实 LLM 冒烟，无 Key 时不跑。含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（Python 3.12.10）：
+采集数 **323**（不含 UI 时 319 = 300 passed + 4 skipped + 15 xfailed；这 4 条 skipped 就是真实 LLM 冒烟，无 Key 时不跑。含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（Python 3.12.10）：
 
 ```bash
 # 全量（含 UI）：其中 4 条依赖真实浏览器，能启动 Chrome 子进程时全部通过
 # （在禁止创建子进程的环境里这 4 条会失败，与代码无关，故 CI 那一步设了 continue-on-error）
-.venv/Scripts/python.exe -m pytest -q            # 302 passed, 4 skipped, 15 xfailed
+.venv/Scripts/python.exe -m pytest -q            # 304 passed, 4 skipped, 15 xfailed
 
 # 不含 UI：CI 的阻塞口径
-.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 298 passed, 4 skipped, 15 xfailed, 0 failed
+.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 300 passed, 4 skipped, 15 xfailed, 0 failed
 
 # 带覆盖率门槛（CI test job 同一条命令）
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing \
     --cov-report=json:.coverage.json --cov-fail-under=70
-#   → 298 passed, 4 skipped, 15 xfailed；TOTAL 1504 stmts / 420 branch = 91.16% ~ 91.32%
+#   → 300 passed, 4 skipped, 15 xfailed；TOTAL 1515 stmts / 420 branch = 91.21%
 #   → Required test coverage of 70.0% reached.
 
 # per-file 门禁（读上一条命令产出的 .coverage.json）
@@ -206,7 +206,7 @@ workflow 会在第一个 step **显式失败**并打印怎么配——静默跳�
 #   → [coverage-perfile] 通过：所有参与判定的文件都不低于 60%
 ```
 
-> `-o addopts=` 不能省：`pyproject.toml` 里 `addopts = "-q"`，而 `-q` 会把末尾的 `302 passed, ...` 汇总行一起吞掉；命令行覆盖为空之后计数才会出现在输出与 CI 日志里。
+> `-o addopts=` 不能省：`pyproject.toml` 里 `addopts = "-q"`，而 `-q` 会把末尾的 `304 passed, ...` 汇总行一起吞掉；命令行覆盖为空之后计数才会出现在输出与 CI 日志里。
 
 **per-file 门禁的判定集合，完全继承它旁边那次 coverage 运行的 `--cov` 口径。**
 本仓是 `--cov=agenttest --cov=demo_app`，参与判定 16 个文件。换成 `--cov=.`
@@ -241,7 +241,7 @@ per-file 的门槛值要重新核一遍（分母变了，最低文件可能换�
 | `tests/test_check_coverage_script.py` | **25** | per-file 门禁脚本自身的测试：配置缺失要退出 1 不是静默通过、排除路径写错要报错、失败输出按百分比升序、JSON 里改低 1pp 必须被抓到（2026-10-18 补） |
 | `tests/test_ui_tool.py` | 4 | UI 工具（**需能真正启动的 Chrome**；在禁止创建子进程的环境里这 4 条会失败，与代码无关） |
 
-15 项 xfail 是**缺陷基准**：用 `@pytest.mark.xfail(strict=True)` 包住「断言契约期望行为」的用例——缺陷存在则 xfail，缺陷被修好会 XPASS 报错提醒更新基准。另有「钉住当前实际行为」的用例直接断言缺陷现状。4 条 UI 用例的结果取决于运行环境：本机**装了** Chrome（`C:\Program Files\Google\Chrome\Application\chrome.exe`），能启动 Chrome 子进程时 4 条全部通过（即上面的 302 passed）；在禁止创建子进程的环境里它们会以 failed 收场（例如 `crashpad_client_win.cc:430 OpenProcess: 拒绝访问 (0x5)`），与代码无关，因此 CI 里那条全量命令设了 `continue-on-error`。
+15 项 xfail 是**缺陷基准**：用 `@pytest.mark.xfail(strict=True)` 包住「断言契约期望行为」的用例——缺陷存在则 xfail，缺陷被修好会 XPASS 报错提醒更新基准。另有「钉住当前实际行为」的用例直接断言缺陷现状。4 条 UI 用例的结果取决于运行环境：本机**装了** Chrome（`C:\Program Files\Google\Chrome\Application\chrome.exe`），能启动 Chrome 子进程时 4 条全部通过（即上面的 304 passed）；在禁止创建子进程的环境里它们会以 failed 收场（例如 `crashpad_client_win.cc:430 OpenProcess: 拒绝访问 (0x5)`），与代码无关，因此 CI 里那条全量命令设了 `continue-on-error`。
 
 ## 架构
 
@@ -514,7 +514,7 @@ sequenceDiagram
 │  ├─ report/            # HTML 报告渲染
 │  ├─ config.py / models.py / runner.py   # config.py 含 dev/staging/prod 环境分层
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（321 collected：302 passed + 4 skipped + 15 缺陷基准 xfail；4 条 UI 需浏览器、4 条 LLM 冒烟需 Key）
+├─ tests/                # 项目自身 pytest（323 collected：304 passed + 4 skipped + 15 缺陷基准 xfail；4 条 UI 需浏览器、4 条 LLM 冒烟需 Key）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示
 │  ├─ check_commit_msg.py  # 零依赖的 Conventional Commits 校验（无 Node 环境的降级路径）
