@@ -55,11 +55,31 @@ class DemoServer:
         self._thread.join(timeout=5)
 
 
+def _direct_get(url: str, timeout: float) -> requests.Response:
+    """GET，且**不吃任何代理环境变量**。
+
+    为什么单独包一层：默认的 `requests` 会读 `HTTP_PROXY` / `HTTPS_PROXY` /
+    `ALL_PROXY`，把发往 `127.0.0.1` 的探测交给代理。代理回自己的 502 时，
+    「服务还没起来」就永远判不出来 —— 轮询到超时后报"服务起不来"，而真正
+    挡住它的是代理。就绪探测的可信度决定后面所有结论的可信度。
+
+    为什么独立成函数：`wait_for_health` 的单元测试需要替换"发请求"这一步
+    （前两次抛异常、第三次返回 200）。给它一个**明确的接缝**比让测试去
+    monkeypatch `requests.get` 更稳：后者依赖"实现恰好用了哪个符号"，
+    换个写法（比如改用 Session）就会让替身静默失效——测试继续绿，但已经
+    不再测这个函数了。接缝是函数边界，替换点是它，不是第三方库的内部符号。
+    """
+    with requests.Session() as session:
+        session.trust_env = False
+        return session.get(url, timeout=timeout)
+
+
 def wait_for_health(url: str, timeout: float = 30.0) -> bool:
+    """轮询被测服务的健康检查，直到 200 或超时。"""
     start = time.time()
     while time.time() - start < timeout:
         try:
-            resp = requests.get(f"{url}/api/health", timeout=2)
+            resp = _direct_get(f"{url}/api/health", timeout=2)
             if resp.status_code == 200:
                 return True
         except requests.RequestException:

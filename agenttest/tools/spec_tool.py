@@ -8,8 +8,15 @@ import requests
 
 
 def fetch_openapi(base_url: str = "http://127.0.0.1:5001", timeout: float = 10.0) -> Dict[str, Any]:
-    """GET {base_url}/openapi.json，返回规范字典。"""
-    resp = requests.get(f"{base_url.rstrip('/')}/openapi.json", timeout=timeout)
+    """GET {base_url}/openapi.json，返回规范字典。
+
+    `trust_env = False` 的理由与 `api_tool._direct_session` 相同：读契约打的是
+    本机被测服务，经代理绕一圈拿回来的可能是代理的错误页，而 `raise_for_status()`
+    会把它当成「被测服务挂了」。
+    """
+    with requests.Session() as session:
+        session.trust_env = False
+        resp = session.get(f"{base_url.rstrip('/')}/openapi.json", timeout=timeout)
     resp.raise_for_status()
     return resp.json()
 

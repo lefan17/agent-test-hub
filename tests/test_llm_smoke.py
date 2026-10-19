@@ -48,6 +48,23 @@ import pytest
 # 三处 gate：marker（便于 -m llm_smoke 单跑）、环境变量、以及 pyproject 里
 # 登记的 marker 名。skipif 的 reason 里要写清楚怎么修，否则 CI 上看到 skip
 # 的人不知道该做什么。
+#
+# **必须先把 `.env` 灌进 os.environ 再判**，否则这条 skipif 会说出与事实相反的
+# 话。踩过的坑（2026-10-19 实测）：`.env.example` 明确写着"LLM Key 一律只写在这里"，
+# 但 `.env` 的加载发生在 `Config.from_env()` 里——而本模块的 `_HAS_KEY` 在
+# **导入时**求值，早于任何 Config 实例。于是一个把 key 正确写进 `.env` 的人，
+# 跑 `-m llm_smoke` 看到的是 4 条 SKIPPED +「未设置 AGENTTEST_LLM_API_KEY」。
+#
+# 这个比"功能坏了"更坏：**测试永远跳过，就永远绿**，而提示语还在把人往
+# 错误方向指（去查环境变量，而 key 就在他刚写好的 .env 里）。显式的错是资产，
+# 这种静默的空转是负债。
+#
+# 复用 `Config.from_env()` 里同一个 `_load_dotenv`，不另写一份解析逻辑：
+# 两处对 `.env` 格式的理解必须永远是同一份，否则又会出现"CI 认、本机不认"。
+from agenttest.config import _load_dotenv  # 复用的正是 Config.from_env() 那个加载器
+
+_load_dotenv()
+
 _HAS_KEY = bool(os.getenv("AGENTTEST_LLM_API_KEY", "").strip())
 
 # 整个文件打 marker（便于 -m llm_smoke 单跑）。
@@ -57,7 +74,12 @@ pytestmark = pytest.mark.llm_smoke
 # 用一个假 key 就能跑——这样没有 key 的机器上也能验证降级路径的可见性。
 _requires_real_key = pytest.mark.skipif(
     not _HAS_KEY,
-    reason="未设置 AGENTTEST_LLM_API_KEY；这是真实 LLM 冒烟，没有 key 时跳过而不是失败",
+    reason=(
+        "未设置 AGENTTEST_LLM_API_KEY（环境变量与仓库根 .env 里都没有）；"
+        "这是真实 LLM 冒烟，没有 key 时跳过而不是失败。\n"
+        "怎么配：把 AGENTTEST_LLM_API_KEY 写进仓库根 .env（.gitignore 已忽略它），"
+        "或 export 到当前 shell；可选 AGENTTEST_LLM_BASE_URL / AGENTTEST_LLM_MODEL。"
+    ),
 )
 
 
