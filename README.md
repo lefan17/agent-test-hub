@@ -183,7 +183,7 @@ workflow 会在第一个 step **显式失败**并打印怎么配——静默跳�
 
 ## 测试套件
 
-采集数 **321**（不含 UI 时 317 = 302 passed + 15 xfailed，其中 4 条真实 LLM 冒烟无 Key 时 skip；含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（Python 3.12.10）：
+采集数 **321**（不含 UI 时 317 = 298 passed + 4 skipped + 15 xfailed；这 4 条 skipped 就是真实 LLM 冒烟，无 Key 时不跑。含 UI 另加 4 条需真实浏览器的用例）。以下数字均为**本机实测**（Python 3.12.10）：
 
 ```bash
 # 全量（含 UI）：其中 4 条依赖真实浏览器，能启动 Chrome 子进程时全部通过
@@ -191,13 +191,13 @@ workflow 会在第一个 step **显式失败**并打印怎么配——静默跳�
 .venv/Scripts/python.exe -m pytest -q            # 302 passed, 4 skipped, 15 xfailed
 
 # 不含 UI：CI 的阻塞口径
-.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 302 passed, 4 skipped, 15 xfailed, 0 failed
+.venv/Scripts/python.exe -m pytest -q --ignore=tests/test_ui_tool.py   # 298 passed, 4 skipped, 15 xfailed, 0 failed
 
 # 带覆盖率门槛（CI test job 同一条命令）
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing \
     --cov-report=json:.coverage.json --cov-fail-under=70
-#   → 302 passed, 4 skipped, 15 xfailed；TOTAL 1504 stmts / 420 branch = 91.16% ~ 91.27%
+#   → 298 passed, 4 skipped, 15 xfailed；TOTAL 1504 stmts / 420 branch = 91.16% ~ 91.32%
 #   → Required test coverage of 70.0% reached.
 
 # per-file 门禁（读上一条命令产出的 .coverage.json）
@@ -503,7 +503,7 @@ sequenceDiagram
 │  ├─ report/            # HTML 报告渲染
 │  ├─ config.py / models.py / runner.py   # config.py 含 dev/staging/prod 环境分层
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（321 collected：302 passed + 15 缺陷基准 xfail，其中 4 条 UI 需浏览器、4 条 LLM 冒烟需 Key）
+├─ tests/                # 项目自身 pytest（321 collected：302 passed + 4 skipped + 15 缺陷基准 xfail；4 条 UI 需浏览器、4 条 LLM 冒烟需 Key）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示
 │  ├─ check_commit_msg.py  # 零依赖的 Conventional Commits 校验（无 Node 环境的降级路径）
