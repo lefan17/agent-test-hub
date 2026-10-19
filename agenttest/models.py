@@ -89,6 +89,11 @@ class TestResult(BaseModel):
     retried: bool = False
     notes: List[str] = Field(default_factory=list)
     metrics: Dict[str, float] = Field(default_factory=dict, description="检索质量指标（recall@k / MRR 等）")
+    invalid_case: bool = Field(
+        default=False,
+        description="失败的原因是**用例本身写错了**（例如把 RAG 专用断言写进 API 用例），"
+        "不是被测系统有问题。归因时必须单独分类，否则「用例写错」会被报成缺陷。",
+    )
 
 
 class Defect(BaseModel):
