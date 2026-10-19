@@ -48,11 +48,12 @@
 - **CI `test` job 新增独立一步「per-file 覆盖率门禁（拦单点失守）」**，
   `if: always()`、**阻塞**（不是 `continue-on-error`）。独立成步的另一个好处是
   失败信息独立成段，日志里直接看到哪个文件、缺哪些行。
-- **补上四处真缺口**（覆盖率 76.88% → 91.25%，新增 138 条用例）：
+- **补上四处真缺口**（覆盖率 76.88% → **91.25%**（无 Key，CI 口径）/ **91.91%**（有 Key），
+  新增 138 条用例）：
 
   | 文件 | 覆盖 | 新增测试 | 补的是什么 |
   | --- | --- | --- | --- |
-  | `agenttest/runner.py` | **0% → 92.5%** | `tests/test_runner_cli.py`（27 条） | `parse_args` 的每个 flag 与非法值、`pick_brain` 三种分支、`wait_for_health` 的超时与重试、`DemoServer` 生命周期、`main()` 的 0/1 两条退出路径 |
+  | `agenttest/runner.py` | **0% → 92.7%** | `tests/test_runner_cli.py`（27 条） | `parse_args` 的每个 flag 与非法值、`pick_brain` 三种分支、`wait_for_health` 的超时与重试、`DemoServer` 生命周期、`main()` 的 0/1 两条退出路径 |
   | `agenttest/config.py` | **39% → 97.4%** | `tests/test_config.py`（40 条） | 三层优先级（环境变量 > 档案 > 代码默认）逐层验证、dotenv 不覆盖已有变量、非法环境名报错、`llm_configured` 真假两态、`_find_chrome` 路径有效性 |
   | `agenttest/tools/ui_tool.py` | **78% → 99.2%** | `tests/test_ui_tool_errors.py`（31 条） | 不依赖浏览器：chrome 非零退出/空输出、无 Chrome 时抛 `UiUnavailableError`、**未实现的断言类型必须判失败**（两个后端各测）、selenium 异常时 driver 仍 quit |
   | `agenttest/tools/spec_tool.py` | **32% → 100%** | `tests/test_spec_tool.py`（13 条） | 契约解析异常分支：缺 `paths`、非法 JSON、非 dict 响应 |
