@@ -247,7 +247,7 @@ class TestWaitForHealth:
                 raise requests.RequestException("还在启动")
             return _Resp()
 
-        monkeypatch.setattr(runner.requests, "get", fake_get)
+        monkeypatch.setattr(runner, "_direct_get", fake_get)
         monkeypatch.setattr(runner.time, "sleep", lambda _s: None)  # 别真睡
 
         assert runner.wait_for_health("http://127.0.0.1:1", timeout=5) is True
@@ -259,7 +259,7 @@ class TestWaitForHealth:
         class _Resp:
             status_code = 503
 
-        monkeypatch.setattr(runner.requests, "get", lambda url, timeout=None: _Resp())
+        monkeypatch.setattr(runner, "_direct_get", lambda url, timeout=None: _Resp())
         monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
         assert runner.wait_for_health("http://127.0.0.1:1", timeout=0.5) is False
 
