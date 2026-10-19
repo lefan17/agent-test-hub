@@ -35,7 +35,7 @@ Closes #
 ```text
 # 1) 测试套件（不含 UI）
 $ .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py
-161 passed, 15 xfailed, 0 failed
+300 passed, 4 skipped, 15 xfailed, 0 failed
 
 # 2) 覆盖率门槛
 $ .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
@@ -54,7 +54,7 @@ All checks passed!
 
 ## 检查清单
 
-- [ ] **测试数字没有下降**：仍然 `161 passed, 15 xfailed, 0 failed`
+- [ ] **测试数字没有下降**：仍然 `300 passed, 4 skipped, 15 xfailed, 0 failed`（那 4 条 skipped 恒为需要真实 Key 的 LLM 冒烟，不是被禁用的测试）
 - [ ] 没有改 `tests/**` 的既有断言（若改了，已在下方说明**为什么原断言是错的**）
 - [ ] 没有改 `demo_app/**` 的注入缺陷（9 个缺陷是**被测对象**，不是待修的 bug）
 - [ ] 没有为了让 CI 变绿而下调覆盖率门槛 / 加 `@pytest.mark.skip` / 加 `# type: ignore` 糊 mypy
