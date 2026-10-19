@@ -46,13 +46,19 @@ def _free_port() -> int:
 
 
 @pytest.fixture
-def clean_env(monkeypatch):
-    """清掉可能从开发机泄漏进来的 AGENTTEST_* 环境变量。
+def clean_env(monkeypatch, tmp_path_factory):
+    """清掉可能从开发机泄漏进来的 AGENTTEST_* 环境变量 **以及 `.env` 文件**。
 
     不清理的话，本机 `.env` 或 shell 里设的 key 会让
     「无 key 时降级为 MockBrain」这类测试**在别人机器上过、在 CI 上挂**
     （或反过来），而且失败信息会完全误导。
+
+    只 `delenv` 是不够的：`Config.from_env()` 在读完进程环境后还会调
+    `_load_dotenv()` 去读仓库根目录的 `.env`，所以开发机上只要有真 key，
+    「无 key 路径」就永远走不到。这里把工作目录切到空的临时目录，
+    `_load_dotenv()` 的相对路径 `Path(".env")` 就找不到文件了。
     """
+    monkeypatch.chdir(tmp_path_factory.mktemp("no-dotenv"))
     for name in (
         "AGENTTEST_LLM_API_KEY",
         "AGENTTEST_LLM_BASE_URL",

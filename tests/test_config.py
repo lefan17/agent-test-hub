@@ -227,7 +227,10 @@ class TestParsingEdges:
         cfg = Config.from_env()
         assert isinstance(cfg.report_dir, os.PathLike)
 
-    def test_llm_configured_follows_key_presence(self, monkeypatch):
+    def test_llm_configured_follows_key_presence(self, monkeypatch, tmp_path):
+        # 必须切到没有 .env 的目录：Config.from_env() 读完进程环境还会调
+        # _load_dotenv() 去读仓库根的 .env，开发机上有真 key 时「无 key」分支走不到。
+        monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("AGENTTEST_LLM_API_KEY", raising=False)
         monkeypatch.setenv("AGENTTEST_ENV", "dev")
         assert Config.from_env().llm_configured is False
