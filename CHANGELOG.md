@@ -166,7 +166,7 @@ curl 明确支持的写法）两个都不是，于是落进最后那个 `else` �
 `test_brain_reads_proxy_from_config_not_environment`）；恢复后 5 passed。
 
 **数字变化**：收集数 327 → **332**；无 Key（CI 口径）304 → **309 passed, 4 skipped**；
-有 Key 312 → **317 passed**；无 Key 覆盖率 `TOTAL 1546/432` → **1558/436 = 91.32%**
+有 Key 312 → **317 passed**；无 Key 覆盖率 `TOTAL 1546/432` → **1558/436，CI runner 实测 91.37%**（本机在 91.22%~92.01% 之间摆，原因见 README 的抖动说明）
 （新测试覆盖到的分支进了分母）。
 
 ### 新增
