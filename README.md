@@ -42,7 +42,7 @@
 - **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、缺陷证据与截图（截图仅在 UI 用例真正跑通时产生）、以及「本轮是否降级为规则引擎」的显式声明
 - **自带被测系统**：Flask Demo 应用注入 2 个 API 契约缺陷 + 1 处 Flaky 注入 + 6 个 RAG 检索缺陷开关（覆盖 9 个缺陷面），Agent 演示「发现缺陷」而非「跑一遍全绿」
 - **零新增依赖**：RAG 检索默认后端用纯标准库实现 BM25（`demo_app/rag.py`），不引入 rank_bm25 / jieba / numpy 等任何检索库，离线确定性可回归
-- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率双重门槛（仓库级 70% + **per-file 60%**，实测分支覆盖 91.20%~91.25%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
+- **企业级工程化外壳**：容器化（Dockerfile + compose 双 profile）、覆盖率双重门槛（仓库级 70% + **per-file 60%**，实测分支覆盖 91.22%~91.32%）、mypy 全绿、ruff、pip-audit 漏洞扫描 + Dependabot、依赖锁文件（pip-tools）、pre-commit、Conventional Commits 门禁（commitlint + 零依赖 Python 替代）、Issue/PR 模板、CODEOWNERS、环境分层（dev/staging/prod）——见 [工程化能力](#工程化能力)
 
 ## 工程化能力
 
@@ -74,23 +74,23 @@
 # 仓库默认配置（pyproject 里 branch = true）
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing
-#   无 Key（= CI 口径，4 条 LLM 冒烟 skip）：TOTAL 1546 stmts / 432 branch = 91.20~91.25%
-#   有 Key（4 条冒烟真跑）：              TOTAL 1546 stmts / 432 branch = 91.91%
+#   无 Key（= CI 口径，4 条 LLM 冒烟 skip）：TOTAL 1558 stmts / 436 branch = 91.22%~91.32%
+#   有 Key（4 条冒烟真跑）：              TOTAL 1558 stmts / 436 branch = 91.78%
 ```
 
-> 上面这两个值都是 2026-10-19 补完 `runner.py` / `config.py` / `spec_tool.py` /
-> `ui_tool.py` 四处缺口、再补上真实 LLM 链路的 4 条冒烟与 3 条 `invalid_case` 回归之后的数字；
-> 补之前是 **76.88%**（1500 stmts / 311 miss）。
+> 上面这两个值都是 2026-10-20 补完 `runner.py` / `config.py` / `spec_tool.py` /
+> `ui_tool.py` 四处缺口、再补上真实 LLM 链路的 4 条冒烟与 3 条 `invalid_case` 回归、
+> 以及 5 条 LLM 传输层回归之后的数字；当初是 **76.88%**（1500 stmts / 311 miss）。
 >
-> **为什么是两个数**：覆盖率的分母不变（1546 / 432），变的是分子——无 Key 时那 4 条
+> **为什么是两个数**：覆盖率的分母不变（1558 / 436），变的是分子——无 Key 时那 4 条
 > LLM 冒烟 skip，`agenttest/brain/llm_brain.py` 只有 83.9%；配上 Key 它们真跑一趟，
-> 同一个文件变成 92.7%，总量因此差 0.66pp。**这不是抖动，是可解释的差异**，
+> 同一个文件变成 92%+，总量因此差 0.46pp。**这不是抖动，是可解释的差异**，
 > 所以两个都写出来：CI 上必然是前一个数，你自己跑出后一个数时不必怀疑看错了。
 >
 > 真正会抖的是 `demo_app/rag.py` 那个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），
 > 命中重试路径时多覆盖或少覆盖几行。同口径重复跑的实测跨度是
-> **91.20% ~ 92.01%**（下限来自 CI runner 的 91.20%、容器内 91.30%，上限来自本机
-> 连续运行里最顺的一次）—— 所以**记账一律取下限 91.20%**。
+> **91.22% ~ 92.01%**（下限来自本机无 Key 口径的两次实测 91.22% / 91.32%，上限来自
+> 连续运行里最顺的一次）—— 所以**记账取下限 91.22%**。
 > 一个区间只能说明测量有抖动，而这里真正需要说清的是「最低的那个文件离门槛有多远」，
 > 那件事由下面的 per-file 表回答。
 > 补的是真缺口，不是为凑数字写的空测试 —— 每一处都对应一个「原来没人验证、
@@ -98,21 +98,21 @@
 > `tests/test_runner_cli.py` / `tests/test_config.py` / `tests/test_spec_tool.py` /
 > `tests/test_ui_tool_errors.py` 的文件头注释。
 
-**CI 门槛取 70**，理由：低于实测口径（分支覆盖 91.2%），留出约 21pp 的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么——**实测口径，不是估算**：
+**CI 门槛取 70**，理由：低于实测口径（分支覆盖 91.22%~91.32%），留出约 21pp 的余量以容纳正常重构。这个门槛能拦住什么、拦不住什么——**实测口径，不是估算**：
 
 | 假设的退化 | 反推覆盖率 | 是否击穿 70 |
 | --- | --- | --- |
-| `demo_app/rag.py`（338 单位，已覆盖 274）整体失去覆盖 | 77.4% | ❌ 拦不住 |
-| `agenttest/graph/nodes.py`（356 单位，已覆盖 322）整体失去覆盖 | 75.0% | ❌ 拦不住 |
-| `demo_app/app.py`（218 单位，已覆盖 197）整体失去覆盖 | 81.3% | ❌ 拦不住 |
+| `agenttest/graph/nodes.py`（356 单位，已覆盖 322）整体失去覆盖 | 75.1% | ❌ 拦不住 |
+| `demo_app/rag.py`（338 单位，已覆盖 274）整体失去覆盖 | 77.5% | ❌ 拦不住 |
+| `demo_app/app.py`（218 单位，已覆盖 195）整体失去覆盖 | 81.4% | ❌ 拦不住 |
 | `agenttest/runner.py`（164 单位，已覆盖 152）整体失去覆盖 | 83.6% | ❌ 拦不住 |
-| `agenttest/brain/llm_brain.py`（149 单位，已覆盖 125）整体失去覆盖 | 84.9% | ❌ 拦不住 |
+| `agenttest/brain/llm_brain.py`（164 单位，已覆盖 140）整体失去覆盖 | 84.2% | ❌ 拦不住 |
 
-**这张表在本轮之后几乎全是「拦不住」，这不是退步，是仓库级门槛的固有性质**：分母（1978 个单位）越大，单个文件占比越小，任何一个文件整个失守都撼动不了总量。70 这道门现在只剩一个作用——拦住「大面积同时失守」（例如换掉整个 `agenttest/tools/` 目录）。
+**这张表在本轮之后几乎全是「拦不住」，这不是退步，是仓库级门槛的固有性质**：分母（1994 个单位）越大，单个文件占比越小，任何一个文件整个失守都撼动不了总量。70 这道门现在只剩一个作用——拦住「大面积同时失守」（例如换掉整个 `agenttest/tools/` 目录）。
 
 真正拦住单点退化的手段是**每文件门槛（per-file gate）**，本轮已经落地：`scripts/check_coverage.py` 读 `--cov-report=json` 的产物，按 `pyproject.toml` 的 `[tool.coverage.perfile]` 逐个文件判。当前的活证据是 `agenttest/runner.py`：它是这套系统的主入口，**原先是 0% 覆盖（126 语句 / 34 分支，missing 10-198 全段），而仓库级 70 这道门照样绿**。把它补到 92.7% 之后，本轮参与判定的 16 个文件最低是 `demo_app/rag.py` 81.1%，于是 per-file 门槛从首轮的 30（刻意只抓 `runner.py` 一个）抬到 **60**。
 
-> 关于抖动：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），它让总量在 **91.20% ~ 92.01%** 之间摆。这个幅度对 70 这道门完全不构成威胁（余量 21pp）。**反倒是上一版配置的风险更大**：当时总量 76.88%、门槛 70，只有 6.9pp 余量，而同一个缺陷的抖动理论上能吃掉其中相当一部分 —— 一个只剩几个百分点余量的门槛，迟早会在某个倒霉的 PR 上间歇性变红，然后被人用重跑糊过去。这也是本轮把测试补齐之后的一个副产品：门槛没变，但它从「刚好够用」变成了「有真实余量」。
+> 关于抖动：`demo_app/rag.py` 有一个 10% 概率返回 503 的注入缺陷（`FLAKY-001`），它让总量在 **91.22% ~ 92.01%** 之间摆。这个幅度对 70 这道门完全不构成威胁（余量 21pp）。**反倒是上一版配置的风险更大**：当时总量 76.88%、门槛 70，只有 6.9pp 余量，而同一个缺陷的抖动理论上能吃掉其中相当一部分 —— 一个只剩几个百分点余量的门槛，迟早会在某个倒霉的 PR 上间歇性变红，然后被人用重跑糊过去。这也是本轮把测试补齐之后的一个副产品：门槛没变，但它从「刚好够用」变成了「有真实余量」。
 
 覆盖率短板（`--cov-report=term-missing` 实测，按缺失语句数排序）——**2026-10-18 之前的表**：
 
@@ -178,6 +178,43 @@ python -m pytest tests/test_llm_smoke.py -v -o addopts= -m llm_smoke
 没有 Key 时那 4 条真实用例 **skip（不是 fail）**，全量套件照常绿。CI 上没配 secret 时
 workflow 会在第一个 step **显式失败**并打印怎么配——静默跳过的冒烟等于没有冒烟。
 
+#### 一个 `NO_PROXY` 里的 `[::1]` 能让整条链路连构造都失败
+
+这是本仓第三个「传输层被环境变量接管」的坑（前两个：[`agenttest/tools/api_tool.py`] 的
+`_direct_session()`、`perf/run_load.py` 的 `_OPENER`），但这次不是量错数据，是**直接崩**。
+
+现象：真实 LLM 冒烟报 `InvalidURL: Invalid port: ':1]'`，规划与归因**全部**降级到
+MockBrain，而 `brain_name` 仍是 `llm` —— 看起来像"模型服务不稳定"，实际是本地代码在
+构造 HTTP 客户端时就抛异常了，一次请求都没发出去。
+
+根因在 httpx 0.28.1 的 `get_environment_proxies()`：它给 `NO_PROXY` 每个条目分类时先判
+`is_ipv4_hostname` / `is_ipv6_hostname`，而 **`[::1]`（带方括号，curl 明确支持的写法）
+两个都不是**，于是落进 `else` 分支被当成域名，拼成 `all://*[::1]`；该 pattern 解析时
+把 `1]` 当端口 → `InvalidURL`。这段解析发生在 `httpx.Client(...)` 构造阶段，所以
+`ChatOpenAI(...)` 连实例都造不出来。
+
+| 输入 | 结果 |
+| --- | --- |
+| `NO_PROXY=...,::1,...` | 正常（`is_ipv6_hostname('::1')` 为真） |
+| `NO_PROXY=...,[::1],...` | `InvalidURL: Invalid port: ':1]'` |
+| `URLPattern('all://[::1]')` | 正常 |
+| `URLPattern('all://*[::1]')` | 崩 —— 上面就是这条路径 |
+
+**修法**：`agenttest/brain/llm_brain.py` 的 `_direct_httpx_client(proxy="")` /
+`_direct_async_httpx_client(proxy="")` 给 `ChatOpenAI` 两个 `trust_env=False` 的客户端。
+**两个都要给**：`ChatOpenAI.validate_environment` 会同时建同步与异步两个默认客户端，
+只传同步那个，崩点会转移到 `_get_default_async_httpx_client` —— 这个实测踩过一次，
+栈里看得很清楚。
+
+**逃生口**：需要走代理才能出网的机器，填 `AGENTTEST_LLM_HTTP_PROXY`（不是 `HTTP_PROXY`）。
+**刻意不自动继承环境变量** —— 自动继承正是这个缺陷的来源，也让「LLM 调用的凭据与流量
+经过不明代理」变成一个默认行为。
+
+**验收**：`tests/test_llm_transport.py`（5 条），其中一条是**反向验证**
+（不传自定义客户端时 `ChatOpenAI(...)` 必须抛 `InvalidURL`，将来 httpx 修了这个解析，
+它会变红提醒可以删掉规避措施），一条是显式代理的**对偶验证**（传了 proxy 必须真的
+生成 mount 规则）。可证伪性实测：把两个客户端参数删掉 → 立刻 2 failed。
+
 ### 为什么 pip-audit 是非阻塞的
 
 它查的是**外部漏洞库**，不是本仓库的代码质量。同一条正确无误的提交，可能今天全绿、明天因为某个依赖被披露新 CVE 而变红；设成阻塞会让「与本次改动无关的失败」卡住所有人的 PR。所以：结果照跑、照进日志与 step summary 与 artifact，但不阻断；真正需要强迫升级时由 Dependabot 自动开 PR。
@@ -195,13 +232,13 @@ workflow 会在第一个 step **显式失败**并打印怎么配——静默跳�
 
 ## 测试套件
 
-采集数 **327**。计数取决于两个本机条件，下表都给出（Python 3.12.10 实测）：
+采集数 **332**。计数取决于两个本机条件，下表都给出（Python 3.12.10 实测）：
 
 | 本机条件 | 全量 `pytest -q` | `--ignore=tests/test_ui_tool.py` |
 | --- | --- | --- |
-| 有 Chrome + `.env` 里有 Key | **312 passed, 15 xfailed** | **308 passed, 15 xfailed** |
-| 有 Chrome、无 Key | 308 passed, 4 skipped, 15 xfailed | 304 passed, 4 skipped, 15 xfailed |
-| CI runner（无 Chrome、无 Key） | 304 passed, 8 skipped, 15 xfailed | 304 passed, 4 skipped, 15 xfailed |
+| 有 Chrome + `.env` 里有 Key | **317 passed, 15 xfailed** | **313 passed, 15 xfailed** |
+| 有 Chrome、无 Key | 313 passed, 4 skipped, 15 xfailed | 309 passed, 4 skipped, 15 xfailed |
+| CI runner（无 Chrome、无 Key） | 309 passed, 8 skipped, 15 xfailed | 309 passed, 4 skipped, 15 xfailed |
 
 差的 8 条 = 4 条真实浏览器用例（`@pytest.mark.skipif("not chrome_present()")`）+ 4 条真实 LLM 冒烟（`llm_smoke` marker，无 Key 时 skip）。**两次 skip 都不是「被禁用的测试」**：前者需要能起 Chrome 子进程，后者需要真实 provider Key，缺条件时跳过是正确行为，有 Key 时它们真跑并真的通过。
 
@@ -216,8 +253,8 @@ workflow 会在第一个 step **显式失败**并打印怎么配——静默跳�
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing \
     --cov-report=json:.coverage.json --cov-fail-under=70
-#   → 有 Key：308 passed, 15 xfailed；无 Key：304 passed, 4 skipped, 15 xfailed
-#   → TOTAL 1546 stmts / 432 branch = 91.20~91.25%（无 Key，CI 口径）/ 91.91%（有 Key）
+#   → 有 Key：313 passed, 15 xfailed；无 Key：309 passed, 4 skipped, 15 xfailed
+#   → TOTAL 1558 stmts / 436 branch = 91.22%~91.32%（无 Key，CI 口径）
 #   → Required test coverage of 70.0% reached.
 
 # per-file 门禁（读上一条命令产出的 .coverage.json）
@@ -547,7 +584,8 @@ sequenceDiagram
 │  ├─ report/            # HTML 报告渲染
 │  ├─ config.py / models.py / runner.py   # config.py 含 dev/staging/prod 环境分层
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（327 collected；4 条 UI 需浏览器、4 条 LLM 冒烟需 Key，缺条件时 skip，15 条缺陷基准 xfail）
+├─ tests/                # 项目自身 pytest（332 collected；4 条 UI 需浏览器、4 条 LLM 冒烟需 Key，缺条件时 skip，15 条缺陷基准 xfail）
+│  └─ test_llm_transport.py  # 钉「LLM 链路的 HTTP 客户端不吃代理环境变量」（5 条，含 1 条反向验证）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示
 │  ├─ check_commit_msg.py  # 零依赖的 Conventional Commits 校验（无 Node 环境的降级路径）

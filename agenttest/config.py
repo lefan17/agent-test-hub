@@ -87,6 +87,10 @@ class Config:
     # 实测 DeepSeek 对 response_format=json_schema 直接回 400（"This response_format
     # type is unavailable now"），function_calling 是三条路里唯一通的。
     llm_structured_method: str = "function_calling"
+    # LLM 链路显式代理。默认空串 = 直连，**刻意不读 HTTP_PROXY / NO_PROXY**。
+    # 原因见 llm_brain._direct_httpx_client() 的注释：httpx 0.28.1 解析 `NO_PROXY=[::1]`
+    # 会抛 InvalidURL，连 ChatOpenAI 的构造函数都过不去。需要走代理的机器显式填这里。
+    llm_http_proxy: str = ""
     ui_backend: str = "auto"  # auto | chrome | selenium
     chrome_path: str = ""
     report_dir: Path = field(default_factory=lambda: Path("reports"))
@@ -141,6 +145,7 @@ class Config:
             llm_base_url=pick("AGENTTEST_LLM_BASE_URL"),
             llm_model=pick("AGENTTEST_LLM_MODEL", "deepseek-chat"),
             llm_structured_method=pick("AGENTTEST_LLM_STRUCTURED_METHOD", "function_calling"),
+            llm_http_proxy=pick("AGENTTEST_LLM_HTTP_PROXY"),
             ui_backend=pick("AGENTTEST_UI_BACKEND", "auto"),
             chrome_path=pick("AGENTTEST_CHROME_PATH"),
             report_dir=Path(pick("AGENTTEST_REPORT_DIR", "reports")),

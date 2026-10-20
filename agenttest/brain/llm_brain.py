@@ -19,6 +19,59 @@ from agenttest.tools.spec_tool import summarize_spec
 
 logger = logging.getLogger(__name__)
 
+
+def _direct_httpx_client(proxy: str = ""):
+    """给 `ChatOpenAI` 一个**不读代理环境变量**的 httpx 客户端。
+
+    这不是「顺手关掉代理」，是绕开一个会**在构造阶段就崩**的上游缺陷：
+
+    httpx 0.28.1 的 `get_environment_proxies()` 生成绕过规则时，对
+    `NO_PROXY` 里每个条目先判 `is_ipv4_hostname` / `is_ipv6_hostname`。
+    `[::1]`（带方括号的 IPv6 —— curl 明确支持的写法）两个都不是，
+    于是落进最后那个 `else` 分支，被当成域名拼成 `all://*[::1]`；
+    这个 pattern 解析时把 `1]` 当端口，抛 `InvalidURL: Invalid port: ':1]'`。
+    而这个字典是在 `httpx.Client(...)` 构造时喂给 `URLPattern` 的，
+    所以**连请求都还没发出去**，`ChatOpenAI(...)` 就已经抛异常了。
+
+    实测（httpx 0.28.1）：
+    - `NO_PROXY=...,::1,...`            → 正常（`is_ipv6_hostname('::1')` 为真）
+    - `NO_PROXY=...,[::1],...`          → `InvalidURL: Invalid port: ':1]'`
+    - `URLPattern('all://[::1]')`       → 正常
+    - `URLPattern('all://*[::1]')`      → 崩（就是上面那个错误路径）
+
+    为什么不能让用户自己「把 `[::1]` 从 NO_PROXY 里删掉」：那是合法规避写法，
+    而且 `NO_PROXY` 常常是公司/工具自动注入的（本机就是 DSH 宿主注入的），
+    期望每个使用者手工清理，等于让代码对环境敏感 —— 这在本仓库已经踩过两次
+    （`api_tool` / `run_load.py` 的代理污染）。正确做法是让这条链路对环境无感：
+    显式给一个 `trust_env=False` 的客户端，本来也不该让一次 LLM 调用被
+    `HTTP_PROXY` 劫持去走转发（模型 API 的凭据与流量不该经过不明代理）。
+
+    代价要说清：设了 `trust_env=False` 之后，**确实需要走代理才能出网的机器**会连不上。
+    所以给了一个显式逃生口 `AGENTTEST_LLM_HTTP_PROXY`（见 `_direct_httpx_client(proxy)`）：
+    需要走代理就显式填地址，不填就是直连。**刻意不自动继承环境变量** ——
+    自动继承正是这个缺陷的来源。取舍是：一次 `InvalidURL` 崩溃比
+    「本机该走代理没走」更难排查，因为前者长得像代码 bug，后者报的是连接超时。
+    """
+    import httpx
+
+    if proxy:
+        return httpx.Client(proxy=proxy, timeout=60.0)
+    return httpx.Client(trust_env=False, timeout=60.0)
+
+
+def _direct_async_httpx_client(proxy: str = ""):
+    """`_direct_httpx_client` 的异步版，理由完全相同。
+
+    单独一个函数而不是复用：`ChatOpenAI` 要的是同步 / 异步**两个不同类**的实例，
+    给错类型它会在别的地方报一个更难懂的错。分成两个函数，名字本身就说明该给哪个。
+    """
+    import httpx
+
+    if proxy:
+        return httpx.AsyncClient(proxy=proxy, timeout=60.0)
+    return httpx.AsyncClient(trust_env=False, timeout=60.0)
+
+
 SYSTEM_PLAN_PROMPT = """你是一名资深测试工程师兼 Agent 架构师，负责为一个被测系统设计自动化测试计划。
 被测系统契约如下（OpenAPI 摘要）：
 {spec}
@@ -154,6 +207,8 @@ class LLMBrain:
         # 结构化输出的落地方式。默认 function_calling 而不是 LangChain 的默认 json_schema：
         # DeepSeek 对 response_format=json_schema 直接回 400。见 _structured() 的注释。
         self.structured_method = cfg.llm_structured_method
+        # LLM 链路的显式代理；空串 = 直连（刻意不读 HTTP_PROXY / NO_PROXY）
+        self.http_proxy = cfg.llm_http_proxy
         # 最近一次降级到 MockBrain 的原因；空串表示这一轮真的走了 LLM。
         # 报告层靠它避免把"降级后的规则引擎输出"标成"真实 LLM"。
         self.last_fallback_reason = ""
@@ -167,6 +222,12 @@ class LLMBrain:
             base_url=self.base_url,
             temperature=0,
             timeout=60,
+            # 两个都要给。`ChatOpenAI.validate_environment` 会**同时**建同步与异步
+            # 两个默认客户端，只传 http_client 的话异步那个仍会读 NO_PROXY 并抛
+            # `InvalidURL: Invalid port: ':1]'` —— 崩溃点在
+            # `_get_default_async_httpx_client` 而不是同步那个，见 _direct_httpx_client 的注释。
+            http_client=_direct_httpx_client(self.http_proxy),
+            http_async_client=_direct_async_httpx_client(self.http_proxy),
         )
 
     def _structured(self, schema):

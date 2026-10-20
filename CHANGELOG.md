@@ -108,9 +108,66 @@
 - `pyproject.toml` 注册 `llm_smoke` marker（没有这条会出 `PytestUnknownMarkWarning`，
   而一个没人能过滤的 marker 等于没有 marker）。
 
-**无 Key 时的行为**：那 4 条 skip（不是 fail），全量套件照常绿（308 passed, 4 skipped,
-15 xfailed；同一台机器配上 Key 之后是 312 passed, 15 xfailed）。收集数从 316 涨到 327（4 条 LLM 冒烟 + 3 条 `invalid_case` 回归 +
-4 条把 `.env` 从开发机依赖变成显式输入）。
+**无 Key 时的行为**：那 4 条 skip（不是 fail），全量套件照常绿（309 passed, 4 skipped,
+15 xfailed；同一台机器配上 Key 之后是 317 passed, 15 xfailed）。收集数从 316 涨到 332（4 条 LLM 冒烟 + 3 条 `invalid_case` 回归 +
+4 条把 `.env` 从开发机依赖变成显式输入 + 5 条 LLM 传输层回归）。
+
+### 修复（2026-10-20：`NO_PROXY` 里的 `[::1]` 会让 LLM 链路连构造都失败）
+
+**这不是降级，是崩溃。** 现象：真实 LLM 冒烟报
+`InvalidURL: Invalid port: ':1]'`，规划与归因**全部**降级到 MockBrain，报告里
+`brain_name` 仍是 `llm` 但 `brain_fallback_reason` 非空 —— 一个看起来像"模型不稳定"、
+实际是本地代码在构造 HTTP 客户端时就抛异常的故障。
+
+**根因（上游 httpx 0.28.1，已最小复现）**：`get_environment_proxies()` 对 `NO_PROXY`
+每个条目先判 `is_ipv4_hostname` / `is_ipv6_hostname`。`[::1]`（带方括号的 IPv6，
+curl 明确支持的写法）两个都不是，于是落进最后那个 `else` 分支被当成域名，
+拼成 `all://*[::1]`；该 pattern 解析时把 `1]` 当端口 → `InvalidURL`。实测对照：
+
+| 输入 | 结果 |
+|---|---|
+| `NO_PROXY=...,::1,...` | 正常（`is_ipv6_hostname('::1')` 为真） |
+| `NO_PROXY=...,[::1],...` | `InvalidURL: Invalid port: ':1]'` |
+| `URLPattern('all://[::1]')` | 正常 |
+| `URLPattern('all://*[::1]')` | 崩 —— 就是上面那条路径 |
+
+因为这段解析发生在 `httpx.Client(...)` **构造阶段**，`ChatOpenAI(...)` 连实例都
+造不出来。而且本机的 `NO_PROXY` 是宿主进程注入的，用户无从预先知道。
+
+**修法**：`agenttest/brain/llm_brain.py` 新增 `_direct_httpx_client(proxy="")` 与
+`_direct_async_httpx_client(proxy="")`，`_chat()` 同时传入 `http_client` 与
+`http_async_client`。**两个都要给**：`ChatOpenAI.validate_environment` 会同时建
+同步与异步两个默认客户端，只传同步那个，崩点会转移到
+`_get_default_async_httpx_client` 那条路上 —— 这个我实测踩了一次，栈里看得很清楚。
+
+**为什么不是「让用户删掉 `[::1]`」**：那是合法规避写法，且往往由工具注入。
+期望每个使用者手工清理，等于让代码对环境敏感 —— 本仓库此前已在 `api_tool` /
+`perf/run_load.py` 踩过两次「传输层吃代理环境变量」，这是第三次。正确做法是让
+这条链路对环境无感。
+
+**代价与逃生口**：`trust_env=False` 意味着**确实需要走代理才能出网的机器**会连不上。
+所以加了配置项 `AGENTTEST_LLM_HTTP_PROXY`（`Config.llm_http_proxy`）：填了就显式走
+代理，不填就直连，**刻意不自动继承 `HTTP_PROXY`** —— 自动继承正是这个缺陷的来源。
+
+**回归钉子** `tests/test_llm_transport.py`（5 条）：
+- `test_bracketed_ipv6_in_no_proxy_reproduces_upstream_crash` —— **反向验证**：不传自定义
+  客户端时 `ChatOpenAI(...)` 必须抛 `InvalidURL`。若哪天 httpx 修了，这条会红，
+  提醒可以删掉整个规避措施；
+- `test_brain_passes_its_own_http_client` —— 钉「两个客户端都要给」；
+- `test_direct_clients_do_not_read_proxy_env` —— 钉「环境代理不变成 mount 规则」；
+- `test_explicit_proxy_is_a_real_escape_hatch` —— 上一条的对偶：传了 proxy 必须真的
+  生成 mount 规则，否则说明参数被忽略；
+- `test_brain_reads_proxy_from_config_not_environment` —— 钉「谁能改变行为」：
+  改 `AGENTTEST_LLM_HTTP_PROXY` 有效、改 `HTTP_PROXY` 无效，否则将来有人图省事
+  把 env 读回来，缺陷会静默复发。
+
+**可证伪性实测**：把 `http_client` / `http_async_client` 两个参数从 `_chat()` 里删掉，
+新测试立刻 **2 failed**（`test_brain_passes_its_own_http_client`、
+`test_brain_reads_proxy_from_config_not_environment`）；恢复后 5 passed。
+
+**数字变化**：收集数 327 → **332**；无 Key（CI 口径）304 → **309 passed, 4 skipped**；
+有 Key 312 → **317 passed**；无 Key 覆盖率 `TOTAL 1546/432` → **1558/436 = 91.32%**
+（新测试覆盖到的分支进了分母）。
 
 ### 新增
 
