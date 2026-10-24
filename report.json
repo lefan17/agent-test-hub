@@ -1,38 +1,40 @@
 {
-  "goal": "对被测待办清单系统执行 API + RAG 检索链路自动化测试，发现缺陷并生成报告",
-  "started_at": "2026-10-13 17:30:49",
-  "finished_at": "2026-10-13 17:30:51",
-  "brain_name": "mock",
-  "llm_configured": false,
+  "goal": "对被测待办清单系统执行 API + Web UI 自动化测试，发现缺陷并生成报告",
+  "started_at": "2026-10-23 13:18:42",
+  "finished_at": "2026-10-23 13:19:10",
+  "brain_name": "llm",
+  "llm_configured": true,
+  "brain_fallback_reason": "",
   "base_url": "http://127.0.0.1:5001",
   "summary": {
-    "total": 25,
-    "passed": 14,
-    "failed": 11,
-    "defects": 11
+    "total": 26,
+    "passed": 18,
+    "failed": 8,
+    "defects": 5
   },
   "cases": [
     {
       "case_id": "API-001",
-      "title": "健康检查应返回 200",
+      "title": "健康检查返回 200",
       "kind": "api",
       "ok": true,
       "expected": "200",
-      "actual": "200 {'status': 'ok', 'time': '2026-10-13T09:30:49.740307+00:00', 'version': '1.0.0'}",
+      "actual": "200 {'status': 'ok', 'time': '2026-10-23T05:18:53.493428+00:00', 'version': '1.0.0'}",
       "actual_status": 200,
       "error": "",
-      "evidence": "请求 GET /api/health -> 200，响应体: {'status': 'ok', 'time': '2026-10-13T09:30:49.740307+00:00', 'version': '1.0.0'}",
-      "duration_ms": 19,
+      "evidence": "请求 GET /api/health -> 200，响应体: {'status': 'ok', 'time': '2026-10-23T05:18:53.493428+00:00', 'version': '1.0.0'}",
+      "duration_ms": 21,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "耗时 19ms"
+        "耗时 20ms"
       ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
       "case_id": "API-002",
-      "title": "正确凭据登录应返回 200 和 token",
+      "title": "正确凭据登录成功并返回 token",
       "kind": "api",
       "ok": true,
       "expected": "200",
@@ -40,17 +42,18 @@
       "actual_status": 200,
       "error": "",
       "evidence": "请求 POST /api/login -> 200，响应体: {'token': 'demo-token-123', 'user': 'admin'}",
-      "duration_ms": 3,
+      "duration_ms": 15,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "耗时 3ms"
+        "耗时 15ms"
       ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
       "case_id": "API-003",
-      "title": "错误密码登录应返回 401",
+      "title": "错误密码登录返回 401",
       "kind": "api",
       "ok": true,
       "expected": "401",
@@ -58,17 +61,18 @@
       "actual_status": 401,
       "error": "",
       "evidence": "请求 POST /api/login -> 401，响应体: {'error': 'invalid credentials'}",
-      "duration_ms": 28,
+      "duration_ms": 15,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "耗时 28ms"
+        "耗时 15ms"
       ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
       "case_id": "API-004",
-      "title": "缺参数登录应返回 400",
+      "title": "登录缺少 password 字段返回 400",
       "kind": "api",
       "ok": true,
       "expected": "400",
@@ -76,35 +80,94 @@
       "actual_status": 400,
       "error": "",
       "evidence": "请求 POST /api/login -> 400，响应体: {'error': 'username and password are required'}",
-      "duration_ms": 3,
+      "duration_ms": 15,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "耗时 3ms"
+        "耗时 15ms"
       ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
       "case_id": "API-005",
-      "title": "查询待办列表应返回 200",
+      "title": "创建待办返回 201",
       "kind": "api",
       "ok": true,
-      "expected": "200",
-      "actual": "200 {'count': 2, 'data': [{'created_at': '2026-10-13T09:30:49.682017+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}, {'created_at': '2026-10-13T09:30:49.683586+00:00",
-      "actual_status": 200,
+      "expected": "201",
+      "actual": "201 {'data': {'created_at': '2026-10-23T05:18:53.555980+00:00', 'id': 3, 'priority': 'high', 'status': 'active', 'title': 'buy milk'}}",
+      "actual_status": 201,
       "error": "",
-      "evidence": "请求 GET /api/todos -> 200，响应体: {'count': 2, 'data': [{'created_at': '2026-10-13T09:30:49.682017+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}, {'created_at': '2026-10-13T09:30:49.683586+00:00', 'id': 2, 'priority': 'medium', 'status': 'done', 'title': '写 Agent 测试用例'}]}",
-      "duration_ms": 27,
+      "evidence": "请求 POST /api/todos -> 201，响应体: {'data': {'created_at': '2026-10-23T05:18:53.555980+00:00', 'id': 3, 'priority': 'high', 'status': 'active', 'title': 'buy milk'}}",
+      "duration_ms": 16,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "耗时 27ms"
+        "耗时 15ms"
       ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
       "case_id": "API-006",
-      "title": "非法 status 过滤应返回 400（契约要求）",
+      "title": "创建待办缺少 title 返回 400",
+      "kind": "api",
+      "ok": false,
+      "expected": "400",
+      "actual": "200 {'data': {'created_at': '2026-10-23T05:18:53.571980+00:00', 'id': 4, 'priority': 'high', 'status': 'active', 'title': '(empty)'}, 'warning': 'created with empty title'}",
+      "actual_status": 200,
+      "error": "期望状态码 400，实际 200",
+      "evidence": "请求 POST /api/todos -> 200，响应体: {'data': {'created_at': '2026-10-23T05:18:53.571980+00:00', 'id': 4, 'priority': 'high', 'status': 'active', 'title': '(empty)'}, 'warning': 'created with empty title'}",
+      "duration_ms": 15,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 15ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-007",
+      "title": "创建待办 title 为超长字符串（256 字符）边界校验",
+      "kind": "api",
+      "ok": false,
+      "expected": "400",
+      "actual": "201 {'data': {'created_at': '2026-10-23T05:18:53.588025+00:00', 'id': 5, 'priority': 'low', 'status': 'active', 'title': 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "actual_status": 201,
+      "error": "期望状态码 400，实际 201",
+      "evidence": "请求 POST /api/todos -> 201，响应体: {'data': {'created_at': '2026-10-23T05:18:53.588025+00:00', 'id': 5, 'priority': 'low', 'status': 'active', 'title': 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "duration_ms": 15,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 15ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-008",
+      "title": "查询待办列表返回 200",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'count': 5, 'data': [{'created_at': '2026-10-23T05:18:42.192138+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}, {'created_at': '2026-10-23T05:18:42.192138+00:00",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /api/todos -> 200，响应体: {'count': 5, 'data': [{'created_at': '2026-10-23T05:18:42.192138+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}, {'created_at': '2026-10-23T05:18:42.192138+00:00', 'id': 2, 'priority': 'medium', 'status': 'done', 'title': '写 Agent 测试用例'}, {'created_at': '2026-1",
+      "duration_ms": 2,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 2ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-009",
+      "title": "按非法 status 过滤待办返回 400",
       "kind": "api",
       "ok": false,
       "expected": "400",
@@ -112,161 +175,151 @@
       "actual_status": 500,
       "error": "期望状态码 400，实际 500",
       "evidence": "请求 GET /api/todos -> 500，响应体: {'error': 'internal error: unexpected status filter'}",
-      "duration_ms": 946,
+      "duration_ms": 939,
       "attempts": 3,
       "retried": true,
       "notes": [
-        "耗时 13ms"
+        "耗时 12ms"
       ],
-      "metrics": {}
-    },
-    {
-      "case_id": "API-007",
-      "title": "创建合法待办应返回 201",
-      "kind": "api",
-      "ok": true,
-      "expected": "201",
-      "actual": "201 {'data': {'created_at': '2026-10-13T09:30:50.755114+00:00', 'id': 3, 'priority': 'high', 'status': 'active', 'title': '由 Agent 自动测试创建的待办'}}",
-      "actual_status": 201,
-      "error": "",
-      "evidence": "请求 POST /api/todos -> 201，响应体: {'data': {'created_at': '2026-10-13T09:30:50.755114+00:00', 'id': 3, 'priority': 'high', 'status': 'active', 'title': '由 Agent 自动测试创建的待办'}}",
-      "duration_ms": 3,
-      "attempts": 1,
-      "retried": false,
-      "notes": [
-        "耗时 3ms"
-      ],
-      "metrics": {}
-    },
-    {
-      "case_id": "API-008",
-      "title": "空 title 创建应返回 400（契约要求）",
-      "kind": "api",
-      "ok": false,
-      "expected": "400",
-      "actual": "200 {'data': {'created_at': '2026-10-13T09:30:50.756669+00:00', 'id': 4, 'priority': 'medium', 'status': 'active', 'title': '(empty)'}, 'warning': 'created with empty title'}",
-      "actual_status": 200,
-      "error": "期望状态码 400，实际 200",
-      "evidence": "请求 POST /api/todos -> 200，响应体: {'data': {'created_at': '2026-10-13T09:30:50.756669+00:00', 'id': 4, 'priority': 'medium', 'status': 'active', 'title': '(empty)'}, 'warning': 'created with empty title'}",
-      "duration_ms": 3,
-      "attempts": 1,
-      "retried": false,
-      "notes": [
-        "耗时 2ms"
-      ],
-      "metrics": {}
-    },
-    {
-      "case_id": "API-009",
-      "title": "非法 priority 应返回 400",
-      "kind": "api",
-      "ok": true,
-      "expected": "400",
-      "actual": "400 {'error': 'invalid priority'}",
-      "actual_status": 400,
-      "error": "",
-      "evidence": "请求 POST /api/todos -> 400，响应体: {'error': 'invalid priority'}",
-      "duration_ms": 3,
-      "attempts": 1,
-      "retried": false,
-      "notes": [
-        "耗时 3ms"
-      ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
       "case_id": "API-010",
-      "title": "查询存在的待办应返回 200",
-      "kind": "api",
-      "ok": true,
-      "expected": "200",
-      "actual": "200 {'data': {'created_at': '2026-10-13T09:30:49.682017+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}}",
-      "actual_status": 200,
-      "error": "",
-      "evidence": "请求 GET /api/todos/1 -> 200，响应体: {'data': {'created_at': '2026-10-13T09:30:49.682017+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}}",
-      "duration_ms": 3,
-      "attempts": 1,
-      "retried": false,
-      "notes": [
-        "耗时 3ms"
-      ],
-      "metrics": {}
-    },
-    {
-      "case_id": "API-011",
-      "title": "查询不存在的待办应返回 404",
+      "title": "查询不存在的待办返回 404",
       "kind": "api",
       "ok": true,
       "expected": "404",
       "actual": "404 {'error': 'todo not found'}",
       "actual_status": 404,
       "error": "",
-      "evidence": "请求 GET /api/todos/99999 -> 404，响应体: {'error': 'todo not found'}",
-      "duration_ms": 3,
+      "evidence": "请求 GET /api/todos/999999 -> 404，响应体: {'error': 'todo not found'}",
+      "duration_ms": 16,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "耗时 3ms"
+        "耗时 16ms"
       ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
-      "case_id": "API-012",
-      "title": "更新待办状态应返回 200",
+      "case_id": "API-011",
+      "title": "更新待办状态为 done 返回 200",
       "kind": "api",
       "ok": true,
       "expected": "200",
-      "actual": "200 {'data': {'created_at': '2026-10-13T09:30:49.683586+00:00', 'id': 2, 'priority': 'medium', 'status': 'active', 'title': '写 Agent 测试用例'}}",
+      "actual": "200 {'data': {'created_at': '2026-10-23T05:18:42.192138+00:00', 'id': 1, 'priority': 'high', 'status': 'done', 'title': '学习 LangGraph 状态图'}}",
       "actual_status": 200,
       "error": "",
-      "evidence": "请求 PATCH /api/todos/2 -> 200，响应体: {'data': {'created_at': '2026-10-13T09:30:49.683586+00:00', 'id': 2, 'priority': 'medium', 'status': 'active', 'title': '写 Agent 测试用例'}}",
-      "duration_ms": 3,
+      "evidence": "请求 PATCH /api/todos/1 -> 200，响应体: {'data': {'created_at': '2026-10-23T05:18:42.192138+00:00', 'id': 1, 'priority': 'high', 'status': 'done', 'title': '学习 LangGraph 状态图'}}",
+      "duration_ms": 15,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "耗时 3ms"
+        "耗时 15ms"
       ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
-      "case_id": "API-013",
-      "title": "非法状态更新应返回 400",
+      "case_id": "API-012",
+      "title": "更新待办为非法状态返回 400",
       "kind": "api",
       "ok": true,
       "expected": "400",
       "actual": "400 {'error': 'invalid status'}",
       "actual_status": 400,
       "error": "",
-      "evidence": "请求 PATCH /api/todos/2 -> 400，响应体: {'error': 'invalid status'}",
-      "duration_ms": 3,
+      "evidence": "请求 PATCH /api/todos/1 -> 400，响应体: {'error': 'invalid status'}",
+      "duration_ms": 14,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "耗时 3ms"
+        "耗时 14ms"
       ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
-      "case_id": "API-014",
-      "title": "删除不存在的待办应返回 404",
+      "case_id": "API-013",
+      "title": "更新不存在待办返回 404",
       "kind": "api",
       "ok": true,
       "expected": "404",
       "actual": "404 {'error': 'todo not found'}",
       "actual_status": 404,
       "error": "",
-      "evidence": "请求 DELETE /api/todos/99999 -> 404，响应体: {'error': 'todo not found'}",
+      "evidence": "请求 PATCH /api/todos/999999 -> 404，响应体: {'error': 'todo not found'}",
+      "duration_ms": 16,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 16ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-014",
+      "title": "删除待办返回 204",
+      "kind": "api",
+      "ok": true,
+      "expected": "204",
+      "actual": "204 ",
+      "actual_status": 204,
+      "error": "",
+      "evidence": "请求 DELETE /api/todos/1 -> 204，响应体: ",
+      "duration_ms": 15,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 15ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-015",
+      "title": "删除不存在待办返回 404",
+      "kind": "api",
+      "ok": true,
+      "expected": "404",
+      "actual": "404 {'error': 'todo not found'}",
+      "actual_status": 404,
+      "error": "",
+      "evidence": "请求 DELETE /api/todos/999999 -> 404，响应体: {'error': 'todo not found'}",
       "duration_ms": 2,
       "attempts": 1,
       "retried": false,
       "notes": [
         "耗时 2ms"
       ],
-      "metrics": {}
+      "metrics": {},
+      "invalid_case": false
     },
     {
-      "case_id": "API-015",
-      "title": "不稳定服务应最终成功（自动重试）",
+      "case_id": "API-016",
+      "title": "待办统计返回 200",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'active': 3, 'done': 1, 'total': 4}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /api/stats -> 200，响应体: {'active': 3, 'done': 1, 'total': 4}",
+      "duration_ms": 12,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 12ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-017",
+      "title": "不稳定接口重试后最终成功（10% 503 场景）",
       "kind": "api",
       "ok": true,
       "expected": "200",
@@ -274,386 +327,275 @@
       "actual_status": 200,
       "error": "",
       "evidence": "请求 GET /api/flaky -> 200，响应体: {'flaky': True, 'ok': True}",
-      "duration_ms": 307,
-      "attempts": 2,
-      "retried": true,
-      "notes": [
-        "耗时 3ms"
-      ],
-      "metrics": {}
-    },
-    {
-      "case_id": "RAG-001",
-      "title": "中文查询应召回相关文档且 recall@5 达标",
-      "kind": "rag",
-      "ok": false,
-      "expected": "HTTP 200；命中包含 DOC-CN-002；recall@k>=1.0；MRR>=1.0",
-      "actual": "200 hits=[] recall@5=0.0000 MRR=0.0000",
-      "actual_status": 200,
-      "error": "命中缺少 ['DOC-CN-002']（实际 []）；recall@5=0.000000 < 阈值 1.0；MRR=0.000000 < 阈值 1.0",
-      "evidence": "请求 GET /api/rag/search?q=向量数据库&top_k=5 -> 200；hits=[]；index={'backend': 'bm25', 'size': 11, 'version': 1}；recall@5=0.000000；MRR=0.000000",
-      "duration_ms": 4,
-      "attempts": 1,
-      "retried": false,
-      "notes": [
-        "期望: HTTP 200；命中包含 DOC-CN-002；recall@k>=1.0；MRR>=1.0",
-        "检索质量指标 recall@5=0.000000，MRR=0.000000",
-        "索引 backend=bm25 size=11 version=1"
-      ],
-      "metrics": {
-        "recall_at_k": 0.0,
-        "mrr": 0.0,
-        "hit_count": 0.0
-      }
-    },
-    {
-      "case_id": "RAG-002",
-      "title": "英文查询检索质量达标（recall@5 与 MRR）",
-      "kind": "rag",
-      "ok": true,
-      "expected": "HTTP 200；命中包含 DOC-EN-004,DOC-EN-001；recall@k>=1.0；MRR>=1.0",
-      "actual": "200 hits=['DOC-EN-004', 'DOC-EN-001', 'DOC-EN-004', 'DOC-EN-004'] recall@5=1.0000 MRR=1.0000",
-      "actual_status": 200,
-      "error": "",
-      "evidence": "请求 GET /api/rag/search?q=search quality metrics&top_k=5 -> 200；hits=[('DOC-EN-004', 1.153394, 1), ('DOC-EN-001', 1.329336, 2), ('DOC-EN-004', 1.529001, 3), ('DOC-EN-004', 1.529001, 4)]；index={'backend': 'bm25', 'size': 11, 'version': 1}；recall@5=1.000000；MRR=1.000000",
-      "duration_ms": 20,
-      "attempts": 1,
-      "retried": false,
-      "notes": [
-        "期望: HTTP 200；命中包含 DOC-EN-004,DOC-EN-001；recall@k>=1.0；MRR>=1.0",
-        "检索质量指标 recall@5=1.000000，MRR=1.000000",
-        "索引 backend=bm25 size=11 version=1"
-      ],
-      "metrics": {
-        "recall_at_k": 1.0,
-        "mrr": 1.0,
-        "hit_count": 4.0
-      }
-    },
-    {
-      "case_id": "RAG-003",
-      "title": "检索结果应按 score 降序（rank 单调）",
-      "kind": "rag",
-      "ok": false,
-      "expected": "HTTP 200；rank 连续且 score 单调非增",
-      "actual": "200 hits=['DOC-EN-004', 'DOC-EN-001', 'DOC-EN-004', 'DOC-EN-004'] recall@5=0.0000 MRR=0.0000",
-      "actual_status": 200,
-      "error": "score 非降序: rank1=1.153394 < rank2=1.329336",
-      "evidence": "请求 GET /api/rag/search?q=search quality metrics&top_k=5 -> 200；hits=[('DOC-EN-004', 1.153394, 1), ('DOC-EN-001', 1.329336, 2), ('DOC-EN-004', 1.529001, 3), ('DOC-EN-004', 1.529001, 4)]；index={'backend': 'bm25', 'size': 11, 'version': 1}；recall@5=0.000000；MRR=0.000000",
       "duration_ms": 15,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "期望: HTTP 200；rank 连续且 score 单调非增",
-        "检索质量指标 recall@5=0.000000，MRR=0.000000",
-        "索引 backend=bm25 size=11 version=1"
+        "耗时 15ms"
       ],
-      "metrics": {
-        "recall_at_k": 0.0,
-        "mrr": 0.0,
-        "hit_count": 4.0
-      }
+      "metrics": {},
+      "invalid_case": false
     },
     {
-      "case_id": "RAG-004",
-      "title": "分数并列时 rank 应按 doc_id 稳定排序",
+      "case_id": "API-018",
+      "title": "RAG 索引元信息返回 200 且含 backend 字段",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'backend': 'bm25', 'doc_ids': ['DOC-CN-001', 'DOC-CN-002', 'DOC-CN-003', 'DOC-CN-004', 'DOC-CN-005', 'DOC-EN-001', 'DOC-EN-002', 'DOC-EN-003', 'DOC-EN-004', 'DOC-TIE-001', 'DOC-TIE-002'], 'fallback':",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /api/rag/index -> 200，响应体: {'backend': 'bm25', 'doc_ids': ['DOC-CN-001', 'DOC-CN-002', 'DOC-CN-003', 'DOC-CN-004', 'DOC-CN-005', 'DOC-EN-001', 'DOC-EN-002', 'DOC-EN-003', 'DOC-EN-004', 'DOC-TIE-001', 'DOC-TIE-002'], 'fallback': '', 'index_size': 11, 'requested_backend': 'bm25', 'size': 11, 'version': 1}",
+      "duration_ms": 2,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 2ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-019",
+      "title": "新增语料文档返回 201",
+      "kind": "api",
+      "ok": true,
+      "expected": "201",
+      "actual": "201 {'data': {'doc_id': 'doc_alpha', 'text': 'python retry backoff strategy'}, 'upserted': False, 'version': 2}",
+      "actual_status": 201,
+      "error": "",
+      "evidence": "请求 POST /api/rag/docs -> 201，响应体: {'data': {'doc_id': 'doc_alpha', 'text': 'python retry backoff strategy'}, 'upserted': False, 'version': 2}",
+      "duration_ms": 13,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 13ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-020",
+      "title": "删除不存在语料文档返回 404",
+      "kind": "api",
+      "ok": true,
+      "expected": "404",
+      "actual": "404 {'error': 'document not found'}",
+      "actual_status": 404,
+      "error": "",
+      "evidence": "请求 DELETE /api/rag/docs/doc_missing -> 404，响应体: {'error': 'document not found'}",
+      "duration_ms": 2,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 2ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "RAG-001",
+      "title": "检索命中已入库文档且排序单调",
       "kind": "rag",
       "ok": false,
-      "expected": "HTTP 200；命中包含 DOC-TIE-001,DOC-TIE-002；并列分数按 doc_id 升序",
-      "actual": "200 hits=['DOC-TIE-002', 'DOC-TIE-001'] recall@5=1.0000 MRR=1.0000",
+      "expected": "HTTP 200；命中包含 doc_alpha；rank 连续且 score 单调非增；hits 中无重复 doc_id",
+      "actual": "200 hits=['doc_alpha', 'doc_alpha'] recall@5=1.0000 MRR=1.0000",
       "actual_status": 200,
-      "error": "并列分数未按 doc_id 升序: DOC-TIE-002(rank1) 排在 DOC-TIE-001(rank2) 之前",
-      "evidence": "请求 GET /api/rag/search?q=duplicate&top_k=5 -> 200；hits=[('DOC-TIE-002', 1.439097, 1), ('DOC-TIE-001', 1.439097, 2)]；index={'backend': 'bm25', 'size': 11, 'version': 1}；recall@5=1.000000；MRR=1.000000",
+      "error": "hits 中重复出现的 doc_id: ['doc_alpha']",
+      "evidence": "请求 GET /api/rag/search?q=retry backoff&top_k=5 -> 200；hits=[('doc_alpha', 2.357254, 1), ('doc_alpha', 2.357254, 2)]；index={'backend': 'bm25', 'size': 12, 'version': 2}；recall@5=1.000000；MRR=1.000000",
       "duration_ms": 14,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "期望: HTTP 200；命中包含 DOC-TIE-001,DOC-TIE-002；并列分数按 doc_id 升序",
+        "期望: HTTP 200；命中包含 doc_alpha；rank 连续且 score 单调非增；hits 中无重复 doc_id",
         "检索质量指标 recall@5=1.000000，MRR=1.000000",
-        "索引 backend=bm25 size=11 version=1"
+        "索引 backend=bm25 size=12 version=2"
       ],
       "metrics": {
         "recall_at_k": 1.0,
         "mrr": 1.0,
         "hit_count": 2.0
-      }
+      },
+      "invalid_case": false
     },
     {
-      "case_id": "RAG-005",
-      "title": "单次检索 hits 中不应出现重复 doc_id",
+      "case_id": "RAG-002",
+      "title": "删除文档后不得再被召回（索引同步）",
       "kind": "rag",
       "ok": false,
-      "expected": "HTTP 200；命中包含 DOC-EN-001；hits 中无重复 doc_id",
-      "actual": "200 hits=['DOC-EN-001', 'DOC-EN-001'] recall@5=1.0000 MRR=1.0000",
+      "expected": "HTTP 200；已删除文档不再被召回；hits 中无重复 doc_id",
+      "actual": "删除后检索 hits=['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP']，ghost=['DOC-PROBE-TMP', 'DOC-PROBE-TMP']，index_size=13/corpus_size=12",
       "actual_status": 200,
-      "error": "hits 中重复出现的 doc_id: ['DOC-EN-001']",
-      "evidence": "请求 GET /api/rag/search?q=vector database&top_k=5 -> 200；hits=[('DOC-EN-001', 1.762239, 1), ('DOC-EN-001', 1.762239, 2)]；index={'backend': 'bm25', 'size': 11, 'version': 1}；recall@5=1.000000；MRR=1.000000",
-      "duration_ms": 15,
-      "attempts": 1,
-      "retried": false,
-      "notes": [
-        "期望: HTTP 200；命中包含 DOC-EN-001；hits 中无重复 doc_id",
-        "检索质量指标 recall@5=1.000000，MRR=1.000000",
-        "索引 backend=bm25 size=11 version=1"
-      ],
-      "metrics": {
-        "recall_at_k": 1.0,
-        "mrr": 1.0,
-        "hit_count": 2.0
-      }
-    },
-    {
-      "case_id": "RAG-006",
-      "title": "文档删除后不应再被召回（索引与语料一致）",
-      "kind": "rag",
-      "ok": false,
-      "expected": "HTTP 200；已删除文档不再被召回",
-      "actual": "删除后检索 hits=['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP']，ghost=['DOC-PROBE-TMP', 'DOC-PROBE-TMP']，index_size=12/corpus_size=11",
-      "actual_status": 200,
-      "error": "删除后仍被召回（陈旧索引 ghost hit）: ['DOC-PROBE-TMP', 'DOC-PROBE-TMP']；index_size=12 != corpus size=11（索引未与语料同步）",
-      "evidence": "一致性探针：新增 DOC-PROBE-TMP（201）→ 删除前命中 ['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP'] → 删除后语料 ['DOC-CN-001', 'DOC-CN-002', 'DOC-CN-003', 'DOC-CN-004', 'DOC-CN-005', 'DOC-EN-001', 'DOC-EN-002', 'DOC-EN-003', 'DOC-EN-004', 'DOC-TIE-001', 'DOC-TIE-002']，再检索命中 ['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP']；reindex -> version 4",
-      "duration_ms": 109,
+      "error": "删除后仍被召回（陈旧索引 ghost hit）: ['DOC-PROBE-TMP', 'DOC-PROBE-TMP']；index_size=13 != corpus size=12（索引未与语料同步）",
+      "evidence": "一致性探针：新增 DOC-PROBE-TMP（201）→ 删除前命中 ['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP'] → 删除后语料 ['DOC-CN-001', 'DOC-CN-002', 'DOC-CN-003', 'DOC-CN-004', 'DOC-CN-005', 'DOC-EN-001', 'DOC-EN-002', 'DOC-EN-003', 'DOC-EN-004', 'DOC-TIE-001', 'DOC-TIE-002', 'doc_alpha']，再检索命中 ['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP']；reindex -> version 5",
+      "duration_ms": 66,
       "attempts": 1,
       "retried": false,
       "notes": [
         "ghost hit 数=2",
-        "index_size=12，语料 size=11",
-        "reindex 后 version=4"
+        "index_size=13，语料 size=12",
+        "reindex 后 version=5"
       ],
       "metrics": {
         "ghost_hit_count": 2.0,
-        "index_size_after_delete": 12.0,
-        "corpus_size_after_delete": 11.0
-      }
+        "index_size_after_delete": 13.0,
+        "corpus_size_after_delete": 12.0
+      },
+      "invalid_case": false
     },
     {
-      "case_id": "RAG-007",
-      "title": "空查询 q 应返回 400（契约要求）",
+      "case_id": "RAG-003",
+      "title": "检索召回率与 MRR 达标",
       "kind": "rag",
       "ok": false,
-      "expected": "HTTP 400",
-      "actual": "200 hits=[] recall@5=0.0000 MRR=0.0000",
+      "expected": "HTTP 200；recall@k>=1.0；MRR>=0.5；rank 连续且 score 单调非增",
+      "actual": "200 hits=['DOC-CN-001', 'doc_alpha', 'doc_alpha'] recall@3=1.0000 MRR=0.5000",
       "actual_status": 200,
-      "error": "状态码期望 400，实际 200",
-      "evidence": "请求 GET /api/rag/search?q=&top_k=5 -> 200；hits=[]；index={'backend': 'bm25', 'size': 11, 'version': 4}；recall@5=0.000000；MRR=0.000000",
-      "duration_ms": 15,
+      "error": "score 非降序: rank2=1.799646 < rank3=2.357254",
+      "evidence": "请求 GET /api/rag/search?q=python retry&top_k=3 -> 200；hits=[('DOC-CN-001', 1.799646, 1), ('doc_alpha', 1.799646, 2), ('doc_alpha', 2.357254, 3)]；index={'backend': 'bm25', 'size': 12, 'version': 5}；recall@3=1.000000；MRR=0.500000",
+      "duration_ms": 2,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "期望: HTTP 400",
+        "期望: HTTP 200；recall@k>=1.0；MRR>=0.5；rank 连续且 score 单调非增",
+        "检索质量指标 recall@3=1.000000，MRR=0.500000",
+        "索引 backend=bm25 size=12 version=5"
+      ],
+      "metrics": {
+        "recall_at_k": 1.0,
+        "mrr": 0.5,
+        "hit_count": 3.0
+      },
+      "invalid_case": false
+    },
+    {
+      "case_id": "RAG-004",
+      "title": "空查询返回 400 契约校验",
+      "kind": "rag",
+      "ok": false,
+      "expected": "HTTP 400；HTTP 状态码符合契约",
+      "actual": "200 hits=[] recall@5=0.0000 MRR=0.0000",
+      "actual_status": 200,
+      "error": "状态码期望 400，实际 200",
+      "evidence": "请求 GET /api/rag/search?q=&top_k=5 -> 200；hits=[]；index={'backend': 'bm25', 'size': 12, 'version': 5}；recall@5=0.000000；MRR=0.000000",
+      "duration_ms": 21,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "期望: HTTP 400；HTTP 状态码符合契约",
         "检索质量指标 recall@5=0.000000，MRR=0.000000",
-        "索引 backend=bm25 size=11 version=4"
+        "索引 backend=bm25 size=12 version=5"
       ],
       "metrics": {
         "recall_at_k": 0.0,
         "mrr": 0.0,
         "hit_count": 0.0
-      }
+      },
+      "invalid_case": false
     },
     {
-      "case_id": "RAG-008",
-      "title": "top_k=0 应返回 400（契约要求）",
-      "kind": "rag",
+      "case_id": "UI-001",
+      "title": "首页加载并展示待办列表容器",
+      "kind": "ui",
       "ok": false,
-      "expected": "HTTP 400",
-      "actual": "200 hits=[] recall@0=0.0000 MRR=0.0000",
+      "expected": "Todo #todo-list",
+      "actual": "Todo: 页面文本不包含；#todo-list: 元素不存在",
+      "actual_status": 0,
+      "error": "UI 断言失败: Todo -> 页面文本不包含 | #todo-list -> 元素不存在",
+      "evidence": "页面 http://127.0.0.1:5001/，DOM 摘要: AgentTest Demo — 智能待办清单 AgentTest Demo — 智能待办清单 这是一个供 Agent 自动测试演示用的待办清单应用。 登录 待办清单 version 1.0.0",
+      "duration_ms": 6530,
+      "attempts": 3,
+      "retried": true,
+      "notes": [
+        "后端: chrome",
+        "截图: reports\\screenshot_UI-001.png"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "UI-002",
+      "title": "页面展示健康状态文本",
+      "kind": "ui",
+      "ok": true,
+      "expected": "body",
+      "actual": "全部断言通过",
       "actual_status": 200,
-      "error": "状态码期望 400，实际 200",
-      "evidence": "请求 GET /api/rag/search?q=vector database&top_k=0 -> 200；hits=[('DOC-EN-001', 1.762239, 1), ('DOC-EN-001', 1.762239, 2)]；index={'backend': 'bm25', 'size': 11, 'version': 4}；recall@0=0.000000；MRR=0.000000",
-      "duration_ms": 4,
+      "error": "",
+      "evidence": "页面 http://127.0.0.1:5001/，DOM 摘要: AgentTest Demo — 智能待办清单 AgentTest Demo — 智能待办清单 这是一个供 Agent 自动测试演示用的待办清单应用。 登录 待办清单 version 1.0.0",
+      "duration_ms": 1746,
       "attempts": 1,
       "retried": false,
       "notes": [
-        "期望: HTTP 400",
-        "检索质量指标 recall@0=0.000000，MRR=0.000000",
-        "索引 backend=bm25 size=11 version=4"
+        "后端: chrome",
+        "截图: reports\\screenshot_UI-002.png"
       ],
-      "metrics": {
-        "recall_at_k": 0.0,
-        "mrr": 0.0,
-        "hit_count": 2.0
-      }
-    },
-    {
-      "case_id": "RAG-009",
-      "title": "top_k 超过上限应返回 400（契约要求）",
-      "kind": "rag",
-      "ok": false,
-      "expected": "HTTP 400",
-      "actual": "200 hits=['DOC-EN-001', 'DOC-EN-001'] recall@999=0.0000 MRR=0.0000",
-      "actual_status": 200,
-      "error": "状态码期望 400，实际 200",
-      "evidence": "请求 GET /api/rag/search?q=vector database&top_k=999 -> 200；hits=[('DOC-EN-001', 1.762239, 1), ('DOC-EN-001', 1.762239, 2)]；index={'backend': 'bm25', 'size': 11, 'version': 4}；recall@999=0.000000；MRR=0.000000",
-      "duration_ms": 3,
-      "attempts": 1,
-      "retried": false,
-      "notes": [
-        "期望: HTTP 400",
-        "检索质量指标 recall@999=0.000000，MRR=0.000000",
-        "索引 backend=bm25 size=11 version=4"
-      ],
-      "metrics": {
-        "recall_at_k": 0.0,
-        "mrr": 0.0,
-        "hit_count": 2.0
-      }
-    },
-    {
-      "case_id": "RAG-010",
-      "title": "超长 q（240 字符）应返回 400（契约要求）",
-      "kind": "rag",
-      "ok": false,
-      "expected": "HTTP 400",
-      "actual": "200 hits=[] recall@5=0.0000 MRR=0.0000",
-      "actual_status": 200,
-      "error": "状态码期望 400，实际 200",
-      "evidence": "请求 GET /api/rag/search?q=契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界&top_k=5 -> 200；hits=[]；index={'backend': 'bm25', 'size': 11, 'version': 4}；recall@5=0.000000；MRR=0.000000",
-      "duration_ms": 23,
-      "attempts": 1,
-      "retried": false,
-      "notes": [
-        "期望: HTTP 400",
-        "检索质量指标 recall@5=0.000000，MRR=0.000000",
-        "索引 backend=bm25 size=11 version=4"
-      ],
-      "metrics": {
-        "recall_at_k": 0.0,
-        "mrr": 0.0,
-        "hit_count": 0.0
-      }
+      "metrics": {},
+      "invalid_case": false
     }
   ],
   "defects": [
     {
       "id": "DEF-001",
-      "title": "契约不符：非法参数应返回 400 却返回 500",
+      "title": "创建待办接口未校验 title：空 title 被放行创建、超长 title 未做长度边界校验",
       "severity": "high",
       "category": "contract",
-      "endpoint": "API 非法 status 过滤应返回 400（契约要求）",
-      "evidence": "期望 400，实际 500；期望状态码 400，实际 500",
-      "suggestion": "按 OpenAPI 契约对非法参数返回 400，并在网关层拦截未预期异常",
+      "endpoint": "POST /api/todos",
+      "evidence": "API-006：空 title 期望 400，实际 200 并创建 id=4（title='(empty)'，仅返回 warning）；API-007：256 字符 title 期望 400，实际 201 创建 id=5。",
+      "suggestion": "在请求校验层对 title 做必填 + 非空白 + 最大长度（如 1~200 字符）校验，非法时返回 400 与明确错误码/字段信息，而不是降级为 '(empty)' 或截断后创建。",
       "related_case_ids": [
-        "API-006"
+        "API-006",
+        "API-007"
       ]
     },
     {
       "id": "DEF-002",
-      "title": "缺失参数校验：空值被接受并写入数据",
+      "title": "GET /api/todos 对非法 status 过滤值未做入参校验，直接抛 500 内部错误",
       "severity": "high",
       "category": "bug",
-      "endpoint": "API 空 title 创建应返回 400（契约要求）",
-      "evidence": "期望 400，实际 200（脏数据已写入）",
-      "suggestion": "服务端对 title 做非空校验，返回 400 且不落库",
+      "endpoint": "GET /api/todos",
+      "evidence": "非法 status 期望 400，实际 500 {'error': 'internal error: unexpected status filter'}，重试 3 次稳定复现。",
+      "suggestion": "对 status 参数做枚举白名单校验（active/completed 等），非法值返回 400 并说明允许取值；同时避免把内部异常信息透出到响应体。",
       "related_case_ids": [
-        "API-008"
+        "API-009"
       ]
     },
     {
       "id": "DEF-003",
-      "title": "检索召回质量缺陷：相关文档未被召回或排名过低",
-      "severity": "high",
+      "title": "RAG 检索索引与语料不同步：同一 doc_id 重复召回、删除后仍命中陈旧索引，且结果 score 非单调",
+      "severity": "critical",
       "category": "relevance",
-      "endpoint": "RAG 中文查询应召回相关文档且 recall@5 达标",
-      "evidence": "命中缺少 ['DOC-CN-002']（实际 []）；recall@5=0.000000 < 阈值 1.0；MRR=0.000000 < 阈值 1.0；请求 GET /api/rag/search?q=向量数据库&top_k=5 -> 200；hits=[]；index={'backend': 'bm25', 'size': 11, 'version': 1}；recall@5=0.000000；MRR=0.000000（recall@k=0.0000，MRR=0.0000）",
-      "suggestion": "检查分词与索引构建：中文需切分为可检索的 token（unigram + bigram），并核对 IDF/长度归一化参数，避免中文查询召回为 0",
+      "endpoint": "GET /api/rag/search",
+      "evidence": "RAG-001：hits=['doc_alpha','doc_alpha'] 重复 doc_id；RAG-002：删除 DOC-PROBE-TMP 后仍召回 ghost hit，index_size=13 != corpus_size=12；RAG-003：rank2 score=1.799646 < rank3 score=2.357254，排序非降序。",
+      "suggestion": "写入/删除时按 doc_id 做幂等 upsert 与 delete（避免重复条目），删除后同步刷新索引并校验 index_size 与语料一致；检索结果按 doc_id 去重后统一按 score 降序排序再截断 top_k；补充索引一致性自检与回归用例。",
       "related_case_ids": [
-        "RAG-001"
-      ]
-    },
-    {
-      "id": "DEF-004",
-      "title": "检索排序缺陷：score 未降序或并列时次序不稳定",
-      "severity": "high",
-      "category": "relevance",
-      "endpoint": "RAG 检索结果应按 score 降序（rank 单调）",
-      "evidence": "score 非降序: rank1=1.153394 < rank2=1.329336；请求 GET /api/rag/search?q=search quality metrics&top_k=5 -> 200；hits=[('DOC-EN-004', 1.153394, 1), ('DOC-EN-001', 1.329336, 2), ('DOC-EN-004', 1.529001, 3), ('DOC-EN-004', 1.529001, 4)]；index={'backend': 'bm25', 'size': 11, 'version': 1}；recall@5=0.000000；MRR=0.000000",
-      "suggestion": "按 score 降序排序，并以 doc_id 升序作为并列时的稳定次序，保证同一查询结果可复现",
-      "related_case_ids": [
+        "RAG-001",
+        "RAG-002",
         "RAG-003"
       ]
     },
     {
-      "id": "DEF-005",
-      "title": "检索排序缺陷：score 未降序或并列时次序不稳定",
-      "severity": "high",
-      "category": "relevance",
-      "endpoint": "RAG 分数并列时 rank 应按 doc_id 稳定排序",
-      "evidence": "并列分数未按 doc_id 升序: DOC-TIE-002(rank1) 排在 DOC-TIE-001(rank2) 之前；请求 GET /api/rag/search?q=duplicate&top_k=5 -> 200；hits=[('DOC-TIE-002', 1.439097, 1), ('DOC-TIE-001', 1.439097, 2)]；index={'backend': 'bm25', 'size': 11, 'version': 1}；recall@5=1.000000；MRR=1.000000",
-      "suggestion": "按 score 降序排序，并以 doc_id 升序作为并列时的稳定次序，保证同一查询结果可复现",
+      "id": "DEF-004",
+      "title": "RAG 检索空查询未按契约返回 400，而是返回 200 空结果",
+      "severity": "medium",
+      "category": "contract",
+      "endpoint": "GET /api/rag/search",
+      "evidence": "q= 空查询期望 400，实际 200 hits=[] recall@5=0。",
+      "suggestion": "对 q 做非空/最小长度校验，空或纯空白时返回 400 并给出参数错误说明。",
       "related_case_ids": [
         "RAG-004"
       ]
     },
     {
-      "id": "DEF-006",
-      "title": "检索去重缺陷：同一文档在 hits 中重复出现",
-      "severity": "medium",
+      "id": "DEF-005",
+      "title": "首页未渲染待办列表容器，页面缺少 Todo 文案与 #todo-list 元素",
+      "severity": "high",
       "category": "bug",
-      "endpoint": "RAG 单次检索 hits 中不应出现重复 doc_id",
-      "evidence": "hits 中重复出现的 doc_id: ['DOC-EN-001']；请求 GET /api/rag/search?q=vector database&top_k=5 -> 200；hits=[('DOC-EN-001', 1.762239, 1), ('DOC-EN-001', 1.762239, 2)]；index={'backend': 'bm25', 'size': 11, 'version': 1}；recall@5=1.000000；MRR=1.000000",
-      "suggestion": "按 doc_id 聚合各 query term 的分数贡献后再排序，保证每个文档只出现一次",
+      "endpoint": "GET / (http://127.0.0.1:5001/)",
+      "evidence": "期望页面包含 'Todo' 文本与 #todo-list 元素；实际 DOM 仅有标题、简介、登录入口与版本号，元素不存在，重试 3 次稳定失败。",
+      "suggestion": "确认首页模板是否漏渲染待办列表组件（或列表依赖登录态/异步加载失败），补齐 #todo-list 容器与列表渲染逻辑，并保证未登录时也有可见容器或明确空态。",
       "related_case_ids": [
-        "RAG-005"
-      ]
-    },
-    {
-      "id": "DEF-007",
-      "title": "索引一致性缺陷：文档删除后仍被检索召回（陈旧索引）",
-      "severity": "high",
-      "category": "relevance",
-      "endpoint": "RAG 文档删除后不应再被召回（索引与语料一致）",
-      "evidence": "删除后仍被召回（陈旧索引 ghost hit）: ['DOC-PROBE-TMP', 'DOC-PROBE-TMP']；index_size=12 != corpus size=11（索引未与语料同步）；一致性探针：新增 DOC-PROBE-TMP（201）→ 删除前命中 ['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP'] → 删除后语料 ['DOC-CN-001', 'DOC-CN-002', 'DOC-CN-003', 'DOC-CN-004', 'DOC-CN-005', 'DOC-EN-001', 'DOC-EN-002', 'DOC-EN-003', 'DOC-EN-004', 'DOC-TIE-001', 'DOC-TIE-002']，再检索命中 ['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP']；reindex -> version 4",
-      "suggestion": "语料变更（增/删/改）时同步更新倒排索引，并让 /api/rag/index 的 index_size 与 size 一致；可加一条「删除后不可召回」的回归用例",
-      "related_case_ids": [
-        "RAG-006"
-      ]
-    },
-    {
-      "id": "DEF-008",
-      "title": "检索接口契约缺陷：非法入参未按契约返回 400",
-      "severity": "high",
-      "category": "contract",
-      "endpoint": "RAG 空查询 q 应返回 400（契约要求）",
-      "evidence": "期望 HTTP 400，实际状态码 200；状态码期望 400，实际 200",
-      "suggestion": "空 q、超长 q、top_k<=0 或超上限时按 OpenAPI 契约返回 400 并给出错误说明",
-      "related_case_ids": [
-        "RAG-007"
-      ]
-    },
-    {
-      "id": "DEF-009",
-      "title": "检索接口契约缺陷：非法入参未按契约返回 400",
-      "severity": "high",
-      "category": "contract",
-      "endpoint": "RAG top_k=0 应返回 400（契约要求）",
-      "evidence": "期望 HTTP 400，实际状态码 200；状态码期望 400，实际 200",
-      "suggestion": "空 q、超长 q、top_k<=0 或超上限时按 OpenAPI 契约返回 400 并给出错误说明",
-      "related_case_ids": [
-        "RAG-008"
-      ]
-    },
-    {
-      "id": "DEF-010",
-      "title": "检索接口契约缺陷：非法入参未按契约返回 400",
-      "severity": "high",
-      "category": "contract",
-      "endpoint": "RAG top_k 超过上限应返回 400（契约要求）",
-      "evidence": "期望 HTTP 400，实际状态码 200；状态码期望 400，实际 200",
-      "suggestion": "空 q、超长 q、top_k<=0 或超上限时按 OpenAPI 契约返回 400 并给出错误说明",
-      "related_case_ids": [
-        "RAG-009"
-      ]
-    },
-    {
-      "id": "DEF-011",
-      "title": "检索接口契约缺陷：非法入参未按契约返回 400",
-      "severity": "high",
-      "category": "contract",
-      "endpoint": "RAG 超长 q（240 字符）应返回 400（契约要求）",
-      "evidence": "期望 HTTP 400，实际状态码 200；状态码期望 400，实际 200",
-      "suggestion": "空 q、超长 q、top_k<=0 或超上限时按 OpenAPI 契约返回 400 并给出错误说明",
-      "related_case_ids": [
-        "RAG-010"
+        "UI-001"
       ]
     }
   ],
@@ -666,83 +608,99 @@
       "API-003",
       "API-004"
     ],
-    "GET /api/todos": [
-      "API-005",
-      "API-006"
-    ],
     "POST /api/todos": [
-      "API-007",
+      "API-005",
+      "API-006",
+      "API-007"
+    ],
+    "GET /api/todos": [
       "API-008",
       "API-009"
     ],
-    "GET /api/todos/1": [
+    "GET /api/todos/999999": [
       "API-010"
     ],
-    "GET /api/todos/99999": [
-      "API-011"
+    "PATCH /api/todos/1": [
+      "API-011",
+      "API-012"
     ],
-    "PATCH /api/todos/2": [
-      "API-012",
+    "PATCH /api/todos/999999": [
       "API-013"
     ],
-    "DELETE /api/todos/99999": [
+    "DELETE /api/todos/1": [
       "API-014"
     ],
-    "GET /api/flaky": [
+    "DELETE /api/todos/999999": [
       "API-015"
     ],
-    "RAG GET /api/rag/search": [
+    "GET /api/stats": [
+      "API-016"
+    ],
+    "GET /api/flaky": [
+      "API-017"
+    ],
+    "GET /api/rag/index": [
+      "API-018",
+      "RAG-002"
+    ],
+    "POST /api/rag/docs": [
+      "API-019",
+      "RAG-002"
+    ],
+    "DELETE /api/rag/docs/doc_missing": [
+      "API-020"
+    ],
+    "GET /api/rag/search": [
       "RAG-001",
       "RAG-002",
       "RAG-003",
-      "RAG-004",
-      "RAG-005",
-      "RAG-006",
-      "RAG-007",
-      "RAG-008",
-      "RAG-009",
-      "RAG-010"
+      "RAG-004"
+    ],
+    "DELETE /api/rag/docs/{doc_id}": [
+      "RAG-002"
+    ],
+    "POST /api/rag/reindex": [
+      "RAG-002"
+    ],
+    "UI http://127.0.0.1:5001/": [
+      "UI-001",
+      "UI-002"
     ]
   },
   "trace": [
-    "[planner] mock 生成 28 条测试用例（--no-ui 过滤后 25 条）",
-    "[executor] PASS API-001 健康检查应返回 200 (期望 200 / 实际 200 {'status': 'ok', 'time': '2026-10-13T09:30:49.740307+00:00', 'version': '1.0.0'} / 19ms)",
-    "[executor] PASS API-002 正确凭据登录应返回 200 和 token (期望 200 / 实际 200 {'token': 'demo-token-123', 'user': 'admin'} / 3ms)",
-    "[executor] PASS API-003 错误密码登录应返回 401 (期望 401 / 实际 401 {'error': 'invalid credentials'} / 28ms)",
-    "[executor] PASS API-004 缺参数登录应返回 400 (期望 400 / 实际 400 {'error': 'username and password are required'} / 3ms)",
-    "[executor] PASS API-005 查询待办列表应返回 200 (期望 200 / 实际 200 {'count': 2, 'data': [{'created_at': '2026-10-13T09:30:49.682017+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}, {'created_at': '2026-10-13T09:30:49.683586+00:00 / 27ms)",
-    "[executor] FAIL API-006 非法 status 过滤应返回 400（契约要求） (期望 400 / 实际 500 {'error': 'internal error: unexpected status filter'} / 946ms / 重试2次)",
-    "[executor] PASS API-007 创建合法待办应返回 201 (期望 201 / 实际 201 {'data': {'created_at': '2026-10-13T09:30:50.755114+00:00', 'id': 3, 'priority': 'high', 'status': 'active', 'title': '由 Agent 自动测试创建的待办'}} / 3ms)",
-    "[executor] FAIL API-008 空 title 创建应返回 400（契约要求） (期望 400 / 实际 200 {'data': {'created_at': '2026-10-13T09:30:50.756669+00:00', 'id': 4, 'priority': 'medium', 'status': 'active', 'title': '(empty)'}, 'warning': 'created with empty title'} / 3ms)",
-    "[executor] PASS API-009 非法 priority 应返回 400 (期望 400 / 实际 400 {'error': 'invalid priority'} / 3ms)",
-    "[executor] PASS API-010 查询存在的待办应返回 200 (期望 200 / 实际 200 {'data': {'created_at': '2026-10-13T09:30:49.682017+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}} / 3ms)",
-    "[executor] PASS API-011 查询不存在的待办应返回 404 (期望 404 / 实际 404 {'error': 'todo not found'} / 3ms)",
-    "[executor] PASS API-012 更新待办状态应返回 200 (期望 200 / 实际 200 {'data': {'created_at': '2026-10-13T09:30:49.683586+00:00', 'id': 2, 'priority': 'medium', 'status': 'active', 'title': '写 Agent 测试用例'}} / 3ms)",
-    "[executor] PASS API-013 非法状态更新应返回 400 (期望 400 / 实际 400 {'error': 'invalid status'} / 3ms)",
-    "[executor] PASS API-014 删除不存在的待办应返回 404 (期望 404 / 实际 404 {'error': 'todo not found'} / 2ms)",
-    "[executor] PASS API-015 不稳定服务应最终成功（自动重试） (期望 200 / 实际 200 {'flaky': True, 'ok': True} / 307ms / 重试1次)",
-    "[executor] FAIL RAG-001 中文查询应召回相关文档且 recall@5 达标 (期望 HTTP 200；命中包含 DOC-CN-002；recall@k>=1.0；MRR>=1.0 / 实际 200 hits=[] recall@5=0.0000 MRR=0.0000 / 4ms)",
-    "[executor] PASS RAG-002 英文查询检索质量达标（recall@5 与 MRR） (期望 HTTP 200；命中包含 DOC-EN-004,DOC-EN-001；recall@k>=1.0；MRR>=1.0 / 实际 200 hits=['DOC-EN-004', 'DOC-EN-001', 'DOC-EN-004', 'DOC-EN-004'] recall@5=1.0000 MRR=1.0000 / 20ms)",
-    "[executor] FAIL RAG-003 检索结果应按 score 降序（rank 单调） (期望 HTTP 200；rank 连续且 score 单调非增 / 实际 200 hits=['DOC-EN-004', 'DOC-EN-001', 'DOC-EN-004', 'DOC-EN-004'] recall@5=0.0000 MRR=0.0000 / 15ms)",
-    "[executor] FAIL RAG-004 分数并列时 rank 应按 doc_id 稳定排序 (期望 HTTP 200；命中包含 DOC-TIE-001,DOC-TIE-002；并列分数按 doc_id 升序 / 实际 200 hits=['DOC-TIE-002', 'DOC-TIE-001'] recall@5=1.0000 MRR=1.0000 / 14ms)",
-    "[executor] FAIL RAG-005 单次检索 hits 中不应出现重复 doc_id (期望 HTTP 200；命中包含 DOC-EN-001；hits 中无重复 doc_id / 实际 200 hits=['DOC-EN-001', 'DOC-EN-001'] recall@5=1.0000 MRR=1.0000 / 15ms)",
-    "[executor] FAIL RAG-006 文档删除后不应再被召回（索引与语料一致） (期望 HTTP 200；已删除文档不再被召回 / 实际 删除后检索 hits=['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP']，ghost=['DOC-PROBE-TMP', 'DOC-PROBE-TMP']，index_size=12/corpus_size=11 / 109ms)",
-    "[executor] FAIL RAG-007 空查询 q 应返回 400（契约要求） (期望 HTTP 400 / 实际 200 hits=[] recall@5=0.0000 MRR=0.0000 / 15ms)",
-    "[executor] FAIL RAG-008 top_k=0 应返回 400（契约要求） (期望 HTTP 400 / 实际 200 hits=[] recall@0=0.0000 MRR=0.0000 / 4ms)",
-    "[executor] FAIL RAG-009 top_k 超过上限应返回 400（契约要求） (期望 HTTP 400 / 实际 200 hits=['DOC-EN-001', 'DOC-EN-001'] recall@999=0.0000 MRR=0.0000 / 3ms)",
-    "[executor] FAIL RAG-010 超长 q（240 字符）应返回 400（契约要求） (期望 HTTP 400 / 实际 200 hits=[] recall@5=0.0000 MRR=0.0000 / 23ms)",
-    "[critic] 失败 11/25，归因出 11 个缺陷",
-    "[critic]   DEF-001 [high/contract] 契约不符：非法参数应返回 400 却返回 500 @ API 非法 status 过滤应返回 400（契约要求）",
-    "[critic]   DEF-002 [high/bug] 缺失参数校验：空值被接受并写入数据 @ API 空 title 创建应返回 400（契约要求）",
-    "[critic]   DEF-003 [high/relevance] 检索召回质量缺陷：相关文档未被召回或排名过低 @ RAG 中文查询应召回相关文档且 recall@5 达标",
-    "[critic]   DEF-004 [high/relevance] 检索排序缺陷：score 未降序或并列时次序不稳定 @ RAG 检索结果应按 score 降序（rank 单调）",
-    "[critic]   DEF-005 [high/relevance] 检索排序缺陷：score 未降序或并列时次序不稳定 @ RAG 分数并列时 rank 应按 doc_id 稳定排序",
-    "[critic]   DEF-006 [medium/bug] 检索去重缺陷：同一文档在 hits 中重复出现 @ RAG 单次检索 hits 中不应出现重复 doc_id",
-    "[critic]   DEF-007 [high/relevance] 索引一致性缺陷：文档删除后仍被检索召回（陈旧索引） @ RAG 文档删除后不应再被召回（索引与语料一致）",
-    "[critic]   DEF-008 [high/contract] 检索接口契约缺陷：非法入参未按契约返回 400 @ RAG 空查询 q 应返回 400（契约要求）",
-    "[critic]   DEF-009 [high/contract] 检索接口契约缺陷：非法入参未按契约返回 400 @ RAG top_k=0 应返回 400（契约要求）",
-    "[critic]   DEF-010 [high/contract] 检索接口契约缺陷：非法入参未按契约返回 400 @ RAG top_k 超过上限应返回 400（契约要求）",
-    "[critic]   DEF-011 [high/contract] 检索接口契约缺陷：非法入参未按契约返回 400 @ RAG 超长 q（240 字符）应返回 400（契约要求）"
+    "[planner] llm 生成 26 条测试用例",
+    "[executor] PASS API-001 健康检查返回 200 (期望 200 / 实际 200 {'status': 'ok', 'time': '2026-10-23T05:18:53.493428+00:00', 'version': '1.0.0'} / 21ms)",
+    "[executor] PASS API-002 正确凭据登录成功并返回 token (期望 200 / 实际 200 {'token': 'demo-token-123', 'user': 'admin'} / 15ms)",
+    "[executor] PASS API-003 错误密码登录返回 401 (期望 401 / 实际 401 {'error': 'invalid credentials'} / 15ms)",
+    "[executor] PASS API-004 登录缺少 password 字段返回 400 (期望 400 / 实际 400 {'error': 'username and password are required'} / 15ms)",
+    "[executor] PASS API-005 创建待办返回 201 (期望 201 / 实际 201 {'data': {'created_at': '2026-10-23T05:18:53.555980+00:00', 'id': 3, 'priority': 'high', 'status': 'active', 'title': 'buy milk'}} / 16ms)",
+    "[executor] FAIL API-006 创建待办缺少 title 返回 400 (期望 400 / 实际 200 {'data': {'created_at': '2026-10-23T05:18:53.571980+00:00', 'id': 4, 'priority': 'high', 'status': 'active', 'title': '(empty)'}, 'warning': 'created with empty title'} / 15ms)",
+    "[executor] FAIL API-007 创建待办 title 为超长字符串（256 字符）边界校验 (期望 400 / 实际 201 {'data': {'created_at': '2026-10-23T05:18:53.588025+00:00', 'id': 5, 'priority': 'low', 'status': 'active', 'title': 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA / 15ms)",
+    "[executor] PASS API-008 查询待办列表返回 200 (期望 200 / 实际 200 {'count': 5, 'data': [{'created_at': '2026-10-23T05:18:42.192138+00:00', 'id': 1, 'priority': 'high', 'status': 'active', 'title': '学习 LangGraph 状态图'}, {'created_at': '2026-10-23T05:18:42.192138+00:00 / 2ms)",
+    "[executor] FAIL API-009 按非法 status 过滤待办返回 400 (期望 400 / 实际 500 {'error': 'internal error: unexpected status filter'} / 939ms / 重试2次)",
+    "[executor] PASS API-010 查询不存在的待办返回 404 (期望 404 / 实际 404 {'error': 'todo not found'} / 16ms)",
+    "[executor] PASS API-011 更新待办状态为 done 返回 200 (期望 200 / 实际 200 {'data': {'created_at': '2026-10-23T05:18:42.192138+00:00', 'id': 1, 'priority': 'high', 'status': 'done', 'title': '学习 LangGraph 状态图'}} / 15ms)",
+    "[executor] PASS API-012 更新待办为非法状态返回 400 (期望 400 / 实际 400 {'error': 'invalid status'} / 14ms)",
+    "[executor] PASS API-013 更新不存在待办返回 404 (期望 404 / 实际 404 {'error': 'todo not found'} / 16ms)",
+    "[executor] PASS API-014 删除待办返回 204 (期望 204 / 实际 204  / 15ms)",
+    "[executor] PASS API-015 删除不存在待办返回 404 (期望 404 / 实际 404 {'error': 'todo not found'} / 2ms)",
+    "[executor] PASS API-016 待办统计返回 200 (期望 200 / 实际 200 {'active': 3, 'done': 1, 'total': 4} / 12ms)",
+    "[executor] PASS API-017 不稳定接口重试后最终成功（10% 503 场景） (期望 200 / 实际 200 {'flaky': True, 'ok': True} / 15ms)",
+    "[executor] PASS API-018 RAG 索引元信息返回 200 且含 backend 字段 (期望 200 / 实际 200 {'backend': 'bm25', 'doc_ids': ['DOC-CN-001', 'DOC-CN-002', 'DOC-CN-003', 'DOC-CN-004', 'DOC-CN-005', 'DOC-EN-001', 'DOC-EN-002', 'DOC-EN-003', 'DOC-EN-004', 'DOC-TIE-001', 'DOC-TIE-002'], 'fallback': / 2ms)",
+    "[executor] PASS API-019 新增语料文档返回 201 (期望 201 / 实际 201 {'data': {'doc_id': 'doc_alpha', 'text': 'python retry backoff strategy'}, 'upserted': False, 'version': 2} / 13ms)",
+    "[executor] PASS API-020 删除不存在语料文档返回 404 (期望 404 / 实际 404 {'error': 'document not found'} / 2ms)",
+    "[executor] FAIL RAG-001 检索命中已入库文档且排序单调 (期望 HTTP 200；命中包含 doc_alpha；rank 连续且 score 单调非增；hits 中无重复 doc_id / 实际 200 hits=['doc_alpha', 'doc_alpha'] recall@5=1.0000 MRR=1.0000 / 14ms)",
+    "[executor] FAIL RAG-002 删除文档后不得再被召回（索引同步） (期望 HTTP 200；已删除文档不再被召回；hits 中无重复 doc_id / 实际 删除后检索 hits=['DOC-EN-002', 'DOC-PROBE-TMP', 'DOC-PROBE-TMP']，ghost=['DOC-PROBE-TMP', 'DOC-PROBE-TMP']，index_size=13/corpus_size=12 / 66ms)",
+    "[executor] FAIL RAG-003 检索召回率与 MRR 达标 (期望 HTTP 200；recall@k>=1.0；MRR>=0.5；rank 连续且 score 单调非增 / 实际 200 hits=['DOC-CN-001', 'doc_alpha', 'doc_alpha'] recall@3=1.0000 MRR=0.5000 / 2ms)",
+    "[executor] FAIL RAG-004 空查询返回 400 契约校验 (期望 HTTP 400；HTTP 状态码符合契约 / 实际 200 hits=[] recall@5=0.0000 MRR=0.0000 / 21ms)",
+    "[executor] FAIL UI-001 首页加载并展示待办列表容器 (期望 Todo #todo-list / 实际 Todo: 页面文本不包含；#todo-list: 元素不存在 / 6530ms / 重试2次)",
+    "[executor] PASS UI-002 页面展示健康状态文本 (期望 body / 实际 全部断言通过 / 1746ms)",
+    "[critic] 失败 8/26，归因出 5 个缺陷",
+    "[critic]   DEF-001 [high/contract] 创建待办接口未校验 title：空 title 被放行创建、超长 title 未做长度边界校验 @ POST /api/todos",
+    "[critic]   DEF-002 [high/bug] GET /api/todos 对非法 status 过滤值未做入参校验，直接抛 500 内部错误 @ GET /api/todos",
+    "[critic]   DEF-003 [critical/relevance] RAG 检索索引与语料不同步：同一 doc_id 重复召回、删除后仍命中陈旧索引，且结果 score 非单调 @ GET /api/rag/search",
+    "[critic]   DEF-004 [medium/contract] RAG 检索空查询未按契约返回 400，而是返回 200 空结果 @ GET /api/rag/search",
+    "[critic]   DEF-005 [high/bug] 首页未渲染待办列表容器，页面缺少 Todo 文案与 #todo-list 元素 @ GET / (http://127.0.0.1:5001/)"
   ],
   "report_files": {}
 }

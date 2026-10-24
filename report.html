@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>Agent 自动测试报告 - 对被测待办清单系统执行 API + RAG 检索链路自动化测试，发现缺陷并生成报告</title>
+<title>Agent 自动测试报告 - 对被测待办清单系统执行 API + Web UI 自动化测试，发现缺陷并生成报告</title>
 <style>
   :root { --ok:#16a34a; --fail:#dc2626; --warn:#d97706; --muted:#6b7280; --line:#e5e7eb; }
   * { box-sizing: border-box; }
@@ -37,137 +37,79 @@
   .trace .t-pass { color:#4ade80; } .trace .t-fail { color:#f87171; }
   img.shot { max-width: 420px; border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; }
   .muted { color: var(--muted); font-size: 12px; }
+  .fallback-warning { background:#78350f; color:#fde68a; border:1px solid #b45309; border-radius:8px; padding:10px 14px; margin:0 0 16px; font-size:13px; line-height:1.7; }
 </style>
 </head>
 <body>
 <header>
   <h1>🤖 Agent 自动测试报告</h1>
   <div class="meta">
-    目标：对被测待办清单系统执行 API + RAG 检索链路自动化测试，发现缺陷并生成报告<br>
-    Brain：mock（规则引擎 Mock，未配置 API Key）
+    目标：对被测待办清单系统执行 API + Web UI 自动化测试，发现缺陷并生成报告<br>
+    Brain：llm（真实 LLM）
     ｜ 被测系统：http://127.0.0.1:5001
-    ｜ 开始 2026-10-13 17:30:49 ～ 结束 2026-10-13 17:30:51
+    ｜ 开始 2026-10-23 13:18:42 ～ 结束 2026-10-23 13:19:10
   </div>
+  
 </header>
 <main>
   <div class="cards">
-    <div class="card"><div class="num">25</div><div class="label">用例总数</div></div>
-    <div class="card"><div class="num ok">14</div><div class="label">通过</div></div>
-    <div class="card"><div class="num fail">11</div><div class="label">失败</div></div>
-    <div class="card"><div class="num fail">11</div><div class="label">发现缺陷</div></div>
+    <div class="card"><div class="num">26</div><div class="label">用例总数</div></div>
+    <div class="card"><div class="num ok">18</div><div class="label">通过</div></div>
+    <div class="card"><div class="num fail">8</div><div class="label">失败</div></div>
+    <div class="card"><div class="num fail">5</div><div class="label">发现缺陷</div></div>
   </div>
 
   
   <h2>🐞 发现的缺陷（Agent 归因）</h2>
   
   <div class="defect ">
-    <h3>DEF-001 契约不符：非法参数应返回 400 却返回 500
+    <h3>DEF-001 创建待办接口未校验 title：空 title 被放行创建、超长 title 未做长度边界校验
       <span class="tag">high / contract</span>
     </h3>
-    <p><b>端点：</b>API 非法 status 过滤应返回 400（契约要求）</p>
-    <p><b>证据：</b>期望 400，实际 500；期望状态码 400，实际 500</p>
-    <p><b>建议：</b>按 OpenAPI 契约对非法参数返回 400，并在网关层拦截未预期异常</p>
-    <p class="muted">关联用例：API-006</p>
+    <p><b>端点：</b>POST /api/todos</p>
+    <p><b>证据：</b>API-006：空 title 期望 400，实际 200 并创建 id=4（title=&#39;(empty)&#39;，仅返回 warning）；API-007：256 字符 title 期望 400，实际 201 创建 id=5。</p>
+    <p><b>建议：</b>在请求校验层对 title 做必填 + 非空白 + 最大长度（如 1~200 字符）校验，非法时返回 400 与明确错误码/字段信息，而不是降级为 &#39;(empty)&#39; 或截断后创建。</p>
+    <p class="muted">关联用例：API-006, API-007</p>
   </div>
   
   <div class="defect ">
-    <h3>DEF-002 缺失参数校验：空值被接受并写入数据
+    <h3>DEF-002 GET /api/todos 对非法 status 过滤值未做入参校验，直接抛 500 内部错误
       <span class="tag">high / bug</span>
     </h3>
-    <p><b>端点：</b>API 空 title 创建应返回 400（契约要求）</p>
-    <p><b>证据：</b>期望 400，实际 200（脏数据已写入）</p>
-    <p><b>建议：</b>服务端对 title 做非空校验，返回 400 且不落库</p>
-    <p class="muted">关联用例：API-008</p>
+    <p><b>端点：</b>GET /api/todos</p>
+    <p><b>证据：</b>非法 status 期望 400，实际 500 {&#39;error&#39;: &#39;internal error: unexpected status filter&#39;}，重试 3 次稳定复现。</p>
+    <p><b>建议：</b>对 status 参数做枚举白名单校验（active/completed 等），非法值返回 400 并说明允许取值；同时避免把内部异常信息透出到响应体。</p>
+    <p class="muted">关联用例：API-009</p>
   </div>
   
   <div class="defect relevance">
-    <h3>DEF-003 检索召回质量缺陷：相关文档未被召回或排名过低
-      <span class="tag">high / relevance</span>
+    <h3>DEF-003 RAG 检索索引与语料不同步：同一 doc_id 重复召回、删除后仍命中陈旧索引，且结果 score 非单调
+      <span class="tag">critical / relevance</span>
     </h3>
-    <p><b>端点：</b>RAG 中文查询应召回相关文档且 recall@5 达标</p>
-    <p><b>证据：</b>命中缺少 [&#39;DOC-CN-002&#39;]（实际 []）；recall@5=0.000000 &lt; 阈值 1.0；MRR=0.000000 &lt; 阈值 1.0；请求 GET /api/rag/search?q=向量数据库&amp;top_k=5 -&gt; 200；hits=[]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 1}；recall@5=0.000000；MRR=0.000000（recall@k=0.0000，MRR=0.0000）</p>
-    <p><b>建议：</b>检查分词与索引构建：中文需切分为可检索的 token（unigram + bigram），并核对 IDF/长度归一化参数，避免中文查询召回为 0</p>
-    <p class="muted">关联用例：RAG-001</p>
+    <p><b>端点：</b>GET /api/rag/search</p>
+    <p><b>证据：</b>RAG-001：hits=[&#39;doc_alpha&#39;,&#39;doc_alpha&#39;] 重复 doc_id；RAG-002：删除 DOC-PROBE-TMP 后仍召回 ghost hit，index_size=13 != corpus_size=12；RAG-003：rank2 score=1.799646 &lt; rank3 score=2.357254，排序非降序。</p>
+    <p><b>建议：</b>写入/删除时按 doc_id 做幂等 upsert 与 delete（避免重复条目），删除后同步刷新索引并校验 index_size 与语料一致；检索结果按 doc_id 去重后统一按 score 降序排序再截断 top_k；补充索引一致性自检与回归用例。</p>
+    <p class="muted">关联用例：RAG-001, RAG-002, RAG-003</p>
   </div>
   
-  <div class="defect relevance">
-    <h3>DEF-004 检索排序缺陷：score 未降序或并列时次序不稳定
-      <span class="tag">high / relevance</span>
+  <div class="defect ">
+    <h3>DEF-004 RAG 检索空查询未按契约返回 400，而是返回 200 空结果
+      <span class="tag">medium / contract</span>
     </h3>
-    <p><b>端点：</b>RAG 检索结果应按 score 降序（rank 单调）</p>
-    <p><b>证据：</b>score 非降序: rank1=1.153394 &lt; rank2=1.329336；请求 GET /api/rag/search?q=search quality metrics&amp;top_k=5 -&gt; 200；hits=[(&#39;DOC-EN-004&#39;, 1.153394, 1), (&#39;DOC-EN-001&#39;, 1.329336, 2), (&#39;DOC-EN-004&#39;, 1.529001, 3), (&#39;DOC-EN-004&#39;, 1.529001, 4)]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 1}；recall@5=0.000000；MRR=0.000000</p>
-    <p><b>建议：</b>按 score 降序排序，并以 doc_id 升序作为并列时的稳定次序，保证同一查询结果可复现</p>
-    <p class="muted">关联用例：RAG-003</p>
-  </div>
-  
-  <div class="defect relevance">
-    <h3>DEF-005 检索排序缺陷：score 未降序或并列时次序不稳定
-      <span class="tag">high / relevance</span>
-    </h3>
-    <p><b>端点：</b>RAG 分数并列时 rank 应按 doc_id 稳定排序</p>
-    <p><b>证据：</b>并列分数未按 doc_id 升序: DOC-TIE-002(rank1) 排在 DOC-TIE-001(rank2) 之前；请求 GET /api/rag/search?q=duplicate&amp;top_k=5 -&gt; 200；hits=[(&#39;DOC-TIE-002&#39;, 1.439097, 1), (&#39;DOC-TIE-001&#39;, 1.439097, 2)]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 1}；recall@5=1.000000；MRR=1.000000</p>
-    <p><b>建议：</b>按 score 降序排序，并以 doc_id 升序作为并列时的稳定次序，保证同一查询结果可复现</p>
+    <p><b>端点：</b>GET /api/rag/search</p>
+    <p><b>证据：</b>q= 空查询期望 400，实际 200 hits=[] recall@5=0。</p>
+    <p><b>建议：</b>对 q 做非空/最小长度校验，空或纯空白时返回 400 并给出参数错误说明。</p>
     <p class="muted">关联用例：RAG-004</p>
   </div>
   
   <div class="defect ">
-    <h3>DEF-006 检索去重缺陷：同一文档在 hits 中重复出现
-      <span class="tag">medium / bug</span>
+    <h3>DEF-005 首页未渲染待办列表容器，页面缺少 Todo 文案与 #todo-list 元素
+      <span class="tag">high / bug</span>
     </h3>
-    <p><b>端点：</b>RAG 单次检索 hits 中不应出现重复 doc_id</p>
-    <p><b>证据：</b>hits 中重复出现的 doc_id: [&#39;DOC-EN-001&#39;]；请求 GET /api/rag/search?q=vector database&amp;top_k=5 -&gt; 200；hits=[(&#39;DOC-EN-001&#39;, 1.762239, 1), (&#39;DOC-EN-001&#39;, 1.762239, 2)]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 1}；recall@5=1.000000；MRR=1.000000</p>
-    <p><b>建议：</b>按 doc_id 聚合各 query term 的分数贡献后再排序，保证每个文档只出现一次</p>
-    <p class="muted">关联用例：RAG-005</p>
-  </div>
-  
-  <div class="defect relevance">
-    <h3>DEF-007 索引一致性缺陷：文档删除后仍被检索召回（陈旧索引）
-      <span class="tag">high / relevance</span>
-    </h3>
-    <p><b>端点：</b>RAG 文档删除后不应再被召回（索引与语料一致）</p>
-    <p><b>证据：</b>删除后仍被召回（陈旧索引 ghost hit）: [&#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]；index_size=12 != corpus size=11（索引未与语料同步）；一致性探针：新增 DOC-PROBE-TMP（201）→ 删除前命中 [&#39;DOC-EN-002&#39;, &#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;] → 删除后语料 [&#39;DOC-CN-001&#39;, &#39;DOC-CN-002&#39;, &#39;DOC-CN-003&#39;, &#39;DOC-CN-004&#39;, &#39;DOC-CN-005&#39;, &#39;DOC-EN-001&#39;, &#39;DOC-EN-002&#39;, &#39;DOC-EN-003&#39;, &#39;DOC-EN-004&#39;, &#39;DOC-TIE-001&#39;, &#39;DOC-TIE-002&#39;]，再检索命中 [&#39;DOC-EN-002&#39;, &#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]；reindex -&gt; version 4</p>
-    <p><b>建议：</b>语料变更（增/删/改）时同步更新倒排索引，并让 /api/rag/index 的 index_size 与 size 一致；可加一条「删除后不可召回」的回归用例</p>
-    <p class="muted">关联用例：RAG-006</p>
-  </div>
-  
-  <div class="defect ">
-    <h3>DEF-008 检索接口契约缺陷：非法入参未按契约返回 400
-      <span class="tag">high / contract</span>
-    </h3>
-    <p><b>端点：</b>RAG 空查询 q 应返回 400（契约要求）</p>
-    <p><b>证据：</b>期望 HTTP 400，实际状态码 200；状态码期望 400，实际 200</p>
-    <p><b>建议：</b>空 q、超长 q、top_k&lt;=0 或超上限时按 OpenAPI 契约返回 400 并给出错误说明</p>
-    <p class="muted">关联用例：RAG-007</p>
-  </div>
-  
-  <div class="defect ">
-    <h3>DEF-009 检索接口契约缺陷：非法入参未按契约返回 400
-      <span class="tag">high / contract</span>
-    </h3>
-    <p><b>端点：</b>RAG top_k=0 应返回 400（契约要求）</p>
-    <p><b>证据：</b>期望 HTTP 400，实际状态码 200；状态码期望 400，实际 200</p>
-    <p><b>建议：</b>空 q、超长 q、top_k&lt;=0 或超上限时按 OpenAPI 契约返回 400 并给出错误说明</p>
-    <p class="muted">关联用例：RAG-008</p>
-  </div>
-  
-  <div class="defect ">
-    <h3>DEF-010 检索接口契约缺陷：非法入参未按契约返回 400
-      <span class="tag">high / contract</span>
-    </h3>
-    <p><b>端点：</b>RAG top_k 超过上限应返回 400（契约要求）</p>
-    <p><b>证据：</b>期望 HTTP 400，实际状态码 200；状态码期望 400，实际 200</p>
-    <p><b>建议：</b>空 q、超长 q、top_k&lt;=0 或超上限时按 OpenAPI 契约返回 400 并给出错误说明</p>
-    <p class="muted">关联用例：RAG-009</p>
-  </div>
-  
-  <div class="defect ">
-    <h3>DEF-011 检索接口契约缺陷：非法入参未按契约返回 400
-      <span class="tag">high / contract</span>
-    </h3>
-    <p><b>端点：</b>RAG 超长 q（240 字符）应返回 400（契约要求）</p>
-    <p><b>证据：</b>期望 HTTP 400，实际状态码 200；状态码期望 400，实际 200</p>
-    <p><b>建议：</b>空 q、超长 q、top_k&lt;=0 或超上限时按 OpenAPI 契约返回 400 并给出错误说明</p>
-    <p class="muted">关联用例：RAG-010</p>
+    <p><b>端点：</b>GET / (http://127.0.0.1:5001/)</p>
+    <p><b>证据：</b>期望页面包含 &#39;Todo&#39; 文本与 #todo-list 元素；实际 DOM 仅有标题、简介、登录入口与版本号，元素不存在，重试 3 次稳定失败。</p>
+    <p><b>建议：</b>确认首页模板是否漏渲染待办列表组件（或列表依赖登录态/异步加载失败），补齐 #todo-list 容器与列表渲染逻辑，并保证未登录时也有可见容器或明确空态。</p>
+    <p class="muted">关联用例：UI-001</p>
   </div>
   
   
@@ -178,29 +120,29 @@
     
     <tr>
       <td>API-001</td>
-      <td>健康检查应返回 200</td>
+      <td>健康检查返回 200</td>
       <td><span class="badge api">api</span></td>
       <td>200</td>
-      <td>200 {&#39;status&#39;: &#39;ok&#39;, &#39;time&#39;: &#39;2026-10-13T09:30:49.740307+00:00&#39;, &#39;version&#39;: &#39;1.0.0&#39;}</td>
+      <td>200 {&#39;status&#39;: &#39;ok&#39;, &#39;time&#39;: &#39;2026-10-23T05:18:53.493428+00:00&#39;, &#39;version&#39;: &#39;1.0.0&#39;}</td>
       <td><span class="badge pass">PASS</span></td>
-      <td>19ms</td>
+      <td>21ms</td>
       <td>
         
         
         
-        <div class="muted">请求 GET /api/health -&gt; 200，响应体: {&#39;status&#39;: &#39;ok&#39;, &#39;time&#39;: &#39;2026-10-13T09:30:49.740307+00:00&#39;, &#39;version&#39;: &#39;1.0.0&#39;}</div>
+        <div class="muted">请求 GET /api/health -&gt; 200，响应体: {&#39;status&#39;: &#39;ok&#39;, &#39;time&#39;: &#39;2026-10-23T05:18:53.493428+00:00&#39;, &#39;version&#39;: &#39;1.0.0&#39;}</div>
         
       </td>
     </tr>
     
     <tr>
       <td>API-002</td>
-      <td>正确凭据登录应返回 200 和 token</td>
+      <td>正确凭据登录成功并返回 token</td>
       <td><span class="badge api">api</span></td>
       <td>200</td>
       <td>200 {&#39;token&#39;: &#39;demo-token-123&#39;, &#39;user&#39;: &#39;admin&#39;}</td>
       <td><span class="badge pass">PASS</span></td>
-      <td>3ms</td>
+      <td>15ms</td>
       <td>
         
         
@@ -212,12 +154,12 @@
     
     <tr>
       <td>API-003</td>
-      <td>错误密码登录应返回 401</td>
+      <td>错误密码登录返回 401</td>
       <td><span class="badge api">api</span></td>
       <td>401</td>
       <td>401 {&#39;error&#39;: &#39;invalid credentials&#39;}</td>
       <td><span class="badge pass">PASS</span></td>
-      <td>28ms</td>
+      <td>15ms</td>
       <td>
         
         
@@ -229,12 +171,12 @@
     
     <tr>
       <td>API-004</td>
-      <td>缺参数登录应返回 400</td>
+      <td>登录缺少 password 字段返回 400</td>
       <td><span class="badge api">api</span></td>
       <td>400</td>
       <td>400 {&#39;error&#39;: &#39;username and password are required&#39;}</td>
       <td><span class="badge pass">PASS</span></td>
-      <td>3ms</td>
+      <td>15ms</td>
       <td>
         
         
@@ -246,29 +188,80 @@
     
     <tr>
       <td>API-005</td>
-      <td>查询待办列表应返回 200</td>
+      <td>创建待办返回 201</td>
       <td><span class="badge api">api</span></td>
-      <td>200</td>
-      <td>200 {&#39;count&#39;: 2, &#39;data&#39;: [{&#39;created_at&#39;: &#39;2026-10-13T09:30:49.682017+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;act</td>
+      <td>201</td>
+      <td>201 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:53.555980+00:00&#39;, &#39;id&#39;: 3, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;</td>
       <td><span class="badge pass">PASS</span></td>
-      <td>27ms</td>
+      <td>16ms</td>
       <td>
         
         
         
-        <div class="muted">请求 GET /api/todos -&gt; 200，响应体: {&#39;count&#39;: 2, &#39;data&#39;: [{&#39;created_at&#39;: &#39;2026-10-13T09:30:49.682017+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}, {&#39;created_at&#39;: &#39;20</div>
+        <div class="muted">请求 POST /api/todos -&gt; 201，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:53.555980+00:00&#39;, &#39;id&#39;: 3, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;buy milk&#39;}}</div>
         
       </td>
     </tr>
     
     <tr>
       <td>API-006</td>
-      <td>非法 status 过滤应返回 400（契约要求）</td>
+      <td>创建待办缺少 title 返回 400</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:53.571980+00:00&#39;, &#39;id&#39;: 4, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>15ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">期望状态码 400，实际 200</div>
+        
+        
+        <div class="muted">请求 POST /api/todos -&gt; 200，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:53.571980+00:00&#39;, &#39;id&#39;: 4, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;(empty)&#39;}, &#39;warning&#39;: &#39;created with empty title&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-007</td>
+      <td>创建待办 title 为超长字符串（256 字符）边界校验</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>201 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:53.588025+00:00&#39;, &#39;id&#39;: 5, &#39;priority&#39;: &#39;low&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;:</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>15ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">期望状态码 400，实际 201</div>
+        
+        
+        <div class="muted">请求 POST /api/todos -&gt; 201，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:53.588025+00:00&#39;, &#39;id&#39;: 5, &#39;priority&#39;: &#39;low&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-008</td>
+      <td>查询待办列表返回 200</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;count&#39;: 5, &#39;data&#39;: [{&#39;created_at&#39;: &#39;2026-10-23T05:18:42.192138+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;act</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>2ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /api/todos -&gt; 200，响应体: {&#39;count&#39;: 5, &#39;data&#39;: [{&#39;created_at&#39;: &#39;2026-10-23T05:18:42.192138+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}, {&#39;created_at&#39;: &#39;20</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-009</td>
+      <td>按非法 status 过滤待办返回 400</td>
       <td><span class="badge api">api</span></td>
       <td>400</td>
       <td>500 {&#39;error&#39;: &#39;internal error: unexpected status filter&#39;}</td>
       <td><span class="badge fail">FAIL</span></td>
-      <td>946ms</td>
+      <td>939ms</td>
       <td>
         <div class="fail" style="font-size:12px">期望状态码 400，实际 500</div>
         
@@ -279,127 +272,93 @@
     </tr>
     
     <tr>
-      <td>API-007</td>
-      <td>创建合法待办应返回 201</td>
-      <td><span class="badge api">api</span></td>
-      <td>201</td>
-      <td>201 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:50.755114+00:00&#39;, &#39;id&#39;: 3, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;</td>
-      <td><span class="badge pass">PASS</span></td>
-      <td>3ms</td>
-      <td>
-        
-        
-        
-        <div class="muted">请求 POST /api/todos -&gt; 201，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:50.755114+00:00&#39;, &#39;id&#39;: 3, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;由 Agent 自动测试创建的待办&#39;}}</div>
-        
-      </td>
-    </tr>
-    
-    <tr>
-      <td>API-008</td>
-      <td>空 title 创建应返回 400（契约要求）</td>
-      <td><span class="badge api">api</span></td>
-      <td>400</td>
-      <td>200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:50.756669+00:00&#39;, &#39;id&#39;: 4, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;titl</td>
-      <td><span class="badge fail">FAIL</span></td>
-      <td>3ms</td>
-      <td>
-        <div class="fail" style="font-size:12px">期望状态码 400，实际 200</div>
-        
-        
-        <div class="muted">请求 POST /api/todos -&gt; 200，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:50.756669+00:00&#39;, &#39;id&#39;: 4, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;(empty)&#39;}, &#39;warning&#39;: &#39;created with empty title&#39;</div>
-        
-      </td>
-    </tr>
-    
-    <tr>
-      <td>API-009</td>
-      <td>非法 priority 应返回 400</td>
-      <td><span class="badge api">api</span></td>
-      <td>400</td>
-      <td>400 {&#39;error&#39;: &#39;invalid priority&#39;}</td>
-      <td><span class="badge pass">PASS</span></td>
-      <td>3ms</td>
-      <td>
-        
-        
-        
-        <div class="muted">请求 POST /api/todos -&gt; 400，响应体: {&#39;error&#39;: &#39;invalid priority&#39;}</div>
-        
-      </td>
-    </tr>
-    
-    <tr>
       <td>API-010</td>
-      <td>查询存在的待办应返回 200</td>
+      <td>查询不存在的待办返回 404</td>
       <td><span class="badge api">api</span></td>
-      <td>200</td>
-      <td>200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:49.682017+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;</td>
+      <td>404</td>
+      <td>404 {&#39;error&#39;: &#39;todo not found&#39;}</td>
       <td><span class="badge pass">PASS</span></td>
-      <td>3ms</td>
+      <td>16ms</td>
       <td>
         
         
         
-        <div class="muted">请求 GET /api/todos/1 -&gt; 200，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:49.682017+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}}</div>
+        <div class="muted">请求 GET /api/todos/999999 -&gt; 404，响应体: {&#39;error&#39;: &#39;todo not found&#39;}</div>
         
       </td>
     </tr>
     
     <tr>
       <td>API-011</td>
-      <td>查询不存在的待办应返回 404</td>
+      <td>更新待办状态为 done 返回 200</td>
       <td><span class="badge api">api</span></td>
-      <td>404</td>
-      <td>404 {&#39;error&#39;: &#39;todo not found&#39;}</td>
+      <td>200</td>
+      <td>200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:42.192138+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;done&#39;, &#39;title&#39;: </td>
       <td><span class="badge pass">PASS</span></td>
-      <td>3ms</td>
+      <td>15ms</td>
       <td>
         
         
         
-        <div class="muted">请求 GET /api/todos/99999 -&gt; 404，响应体: {&#39;error&#39;: &#39;todo not found&#39;}</div>
+        <div class="muted">请求 PATCH /api/todos/1 -&gt; 200，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:42.192138+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;done&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}}</div>
         
       </td>
     </tr>
     
     <tr>
       <td>API-012</td>
-      <td>更新待办状态应返回 200</td>
+      <td>更新待办为非法状态返回 400</td>
       <td><span class="badge api">api</span></td>
-      <td>200</td>
-      <td>200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:49.683586+00:00&#39;, &#39;id&#39;: 2, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;titl</td>
+      <td>400</td>
+      <td>400 {&#39;error&#39;: &#39;invalid status&#39;}</td>
       <td><span class="badge pass">PASS</span></td>
-      <td>3ms</td>
+      <td>14ms</td>
       <td>
         
         
         
-        <div class="muted">请求 PATCH /api/todos/2 -&gt; 200，响应体: {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:49.683586+00:00&#39;, &#39;id&#39;: 2, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;写 Agent 测试用例&#39;}}</div>
+        <div class="muted">请求 PATCH /api/todos/1 -&gt; 400，响应体: {&#39;error&#39;: &#39;invalid status&#39;}</div>
         
       </td>
     </tr>
     
     <tr>
       <td>API-013</td>
-      <td>非法状态更新应返回 400</td>
+      <td>更新不存在待办返回 404</td>
       <td><span class="badge api">api</span></td>
-      <td>400</td>
-      <td>400 {&#39;error&#39;: &#39;invalid status&#39;}</td>
+      <td>404</td>
+      <td>404 {&#39;error&#39;: &#39;todo not found&#39;}</td>
       <td><span class="badge pass">PASS</span></td>
-      <td>3ms</td>
+      <td>16ms</td>
       <td>
         
         
         
-        <div class="muted">请求 PATCH /api/todos/2 -&gt; 400，响应体: {&#39;error&#39;: &#39;invalid status&#39;}</div>
+        <div class="muted">请求 PATCH /api/todos/999999 -&gt; 404，响应体: {&#39;error&#39;: &#39;todo not found&#39;}</div>
         
       </td>
     </tr>
     
     <tr>
       <td>API-014</td>
-      <td>删除不存在的待办应返回 404</td>
+      <td>删除待办返回 204</td>
+      <td><span class="badge api">api</span></td>
+      <td>204</td>
+      <td>204 </td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>15ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 DELETE /api/todos/1 -&gt; 204，响应体: </div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-015</td>
+      <td>删除不存在待办返回 404</td>
       <td><span class="badge api">api</span></td>
       <td>404</td>
       <td>404 {&#39;error&#39;: &#39;todo not found&#39;}</td>
@@ -409,124 +368,124 @@
         
         
         
-        <div class="muted">请求 DELETE /api/todos/99999 -&gt; 404，响应体: {&#39;error&#39;: &#39;todo not found&#39;}</div>
+        <div class="muted">请求 DELETE /api/todos/999999 -&gt; 404，响应体: {&#39;error&#39;: &#39;todo not found&#39;}</div>
         
       </td>
     </tr>
     
     <tr>
-      <td>API-015</td>
-      <td>不稳定服务应最终成功（自动重试）</td>
+      <td>API-016</td>
+      <td>待办统计返回 200</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;active&#39;: 3, &#39;done&#39;: 1, &#39;total&#39;: 4}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>12ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /api/stats -&gt; 200，响应体: {&#39;active&#39;: 3, &#39;done&#39;: 1, &#39;total&#39;: 4}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-017</td>
+      <td>不稳定接口重试后最终成功（10% 503 场景）</td>
       <td><span class="badge api">api</span></td>
       <td>200</td>
       <td>200 {&#39;flaky&#39;: True, &#39;ok&#39;: True}</td>
       <td><span class="badge pass">PASS</span></td>
-      <td>307ms</td>
+      <td>15ms</td>
       <td>
         
         
-        <div class="warn muted">已重试 1 次</div>
+        
         <div class="muted">请求 GET /api/flaky -&gt; 200，响应体: {&#39;flaky&#39;: True, &#39;ok&#39;: True}</div>
         
       </td>
     </tr>
     
     <tr>
-      <td>RAG-001</td>
-      <td>中文查询应召回相关文档且 recall@5 达标</td>
-      <td><span class="badge rag">rag</span></td>
-      <td>HTTP 200；命中包含 DOC-CN-002；recall@k&gt;=1.0；MRR&gt;=1.0</td>
-      <td>200 hits=[] recall@5=0.0000 MRR=0.0000</td>
-      <td><span class="badge fail">FAIL</span></td>
-      <td>4ms</td>
+      <td>API-018</td>
+      <td>RAG 索引元信息返回 200 且含 backend 字段</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;backend&#39;: &#39;bm25&#39;, &#39;doc_ids&#39;: [&#39;DOC-CN-001&#39;, &#39;DOC-CN-002&#39;, &#39;DOC-CN-003&#39;, &#39;DOC-CN-004&#39;, &#39;DOC-CN-005&#39;, &#39;DOC-EN-001&#39;, </td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>2ms</td>
       <td>
-        <div class="fail" style="font-size:12px">命中缺少 [&#39;DOC-CN-002&#39;]（实际 []）；recall@5=0.000000 &lt; 阈值 1.0；MRR=0.000000 &lt; 阈值 1.0</div>
-        <div class="muted">指标：recall_at_k=0.0000，mrr=0.0000，hit_count=0.0000</div>
         
-        <div class="muted">请求 GET /api/rag/search?q=向量数据库&amp;top_k=5 -&gt; 200；hits=[]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 1}；recall@5=0.000000；MRR=0.000000</div>
+        
+        
+        <div class="muted">请求 GET /api/rag/index -&gt; 200，响应体: {&#39;backend&#39;: &#39;bm25&#39;, &#39;doc_ids&#39;: [&#39;DOC-CN-001&#39;, &#39;DOC-CN-002&#39;, &#39;DOC-CN-003&#39;, &#39;DOC-CN-004&#39;, &#39;DOC-CN-005&#39;, &#39;DOC-EN-001&#39;, &#39;DOC-EN-002&#39;, &#39;DOC-EN-003&#39;, &#39;DOC-EN-004&#39;, &#39;DOC-TIE</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-019</td>
+      <td>新增语料文档返回 201</td>
+      <td><span class="badge api">api</span></td>
+      <td>201</td>
+      <td>201 {&#39;data&#39;: {&#39;doc_id&#39;: &#39;doc_alpha&#39;, &#39;text&#39;: &#39;python retry backoff strategy&#39;}, &#39;upserted&#39;: False, &#39;version&#39;: 2}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>13ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 POST /api/rag/docs -&gt; 201，响应体: {&#39;data&#39;: {&#39;doc_id&#39;: &#39;doc_alpha&#39;, &#39;text&#39;: &#39;python retry backoff strategy&#39;}, &#39;upserted&#39;: False, &#39;version&#39;: 2}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-020</td>
+      <td>删除不存在语料文档返回 404</td>
+      <td><span class="badge api">api</span></td>
+      <td>404</td>
+      <td>404 {&#39;error&#39;: &#39;document not found&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>2ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 DELETE /api/rag/docs/doc_missing -&gt; 404，响应体: {&#39;error&#39;: &#39;document not found&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>RAG-001</td>
+      <td>检索命中已入库文档且排序单调</td>
+      <td><span class="badge rag">rag</span></td>
+      <td>HTTP 200；命中包含 doc_alpha；rank 连续且 score 单调非增；hits 中无重复 doc_id</td>
+      <td>200 hits=[&#39;doc_alpha&#39;, &#39;doc_alpha&#39;] recall@5=1.0000 MRR=1.0000</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>14ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">hits 中重复出现的 doc_id: [&#39;doc_alpha&#39;]</div>
+        <div class="muted">指标：recall_at_k=1.0000，mrr=1.0000，hit_count=2.0000</div>
+        
+        <div class="muted">请求 GET /api/rag/search?q=retry backoff&amp;top_k=5 -&gt; 200；hits=[(&#39;doc_alpha&#39;, 2.357254, 1), (&#39;doc_alpha&#39;, 2.357254, 2)]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 12, &#39;version&#39;: 2}；recall@5=1.000000；MRR=1.000000</div>
         
       </td>
     </tr>
     
     <tr>
       <td>RAG-002</td>
-      <td>英文查询检索质量达标（recall@5 与 MRR）</td>
+      <td>删除文档后不得再被召回（索引同步）</td>
       <td><span class="badge rag">rag</span></td>
-      <td>HTTP 200；命中包含 DOC-EN-004,DOC-EN-001；recall@k&gt;=1.0；MRR&gt;=1.0</td>
-      <td>200 hits=[&#39;DOC-EN-004&#39;, &#39;DOC-EN-001&#39;, &#39;DOC-EN-004&#39;, &#39;DOC-EN-004&#39;] recall@5=1.0000 MRR=1.0000</td>
-      <td><span class="badge pass">PASS</span></td>
-      <td>20ms</td>
-      <td>
-        
-        <div class="muted">指标：recall_at_k=1.0000，mrr=1.0000，hit_count=4.0000</div>
-        
-        <div class="muted">请求 GET /api/rag/search?q=search quality metrics&amp;top_k=5 -&gt; 200；hits=[(&#39;DOC-EN-004&#39;, 1.153394, 1), (&#39;DOC-EN-001&#39;, 1.329336, 2), (&#39;DOC-EN-004&#39;, 1.529001, 3), (&#39;DOC-EN-004&#39;, 1.529001, 4)]；index={&#39;backend</div>
-        
-      </td>
-    </tr>
-    
-    <tr>
-      <td>RAG-003</td>
-      <td>检索结果应按 score 降序（rank 单调）</td>
-      <td><span class="badge rag">rag</span></td>
-      <td>HTTP 200；rank 连续且 score 单调非增</td>
-      <td>200 hits=[&#39;DOC-EN-004&#39;, &#39;DOC-EN-001&#39;, &#39;DOC-EN-004&#39;, &#39;DOC-EN-004&#39;] recall@5=0.0000 MRR=0.0000</td>
+      <td>HTTP 200；已删除文档不再被召回；hits 中无重复 doc_id</td>
+      <td>删除后检索 hits=[&#39;DOC-EN-002&#39;, &#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]，ghost=[&#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]，index_size=13/corpu</td>
       <td><span class="badge fail">FAIL</span></td>
-      <td>15ms</td>
+      <td>66ms</td>
       <td>
-        <div class="fail" style="font-size:12px">score 非降序: rank1=1.153394 &lt; rank2=1.329336</div>
-        <div class="muted">指标：recall_at_k=0.0000，mrr=0.0000，hit_count=4.0000</div>
-        
-        <div class="muted">请求 GET /api/rag/search?q=search quality metrics&amp;top_k=5 -&gt; 200；hits=[(&#39;DOC-EN-004&#39;, 1.153394, 1), (&#39;DOC-EN-001&#39;, 1.329336, 2), (&#39;DOC-EN-004&#39;, 1.529001, 3), (&#39;DOC-EN-004&#39;, 1.529001, 4)]；index={&#39;backend</div>
-        
-      </td>
-    </tr>
-    
-    <tr>
-      <td>RAG-004</td>
-      <td>分数并列时 rank 应按 doc_id 稳定排序</td>
-      <td><span class="badge rag">rag</span></td>
-      <td>HTTP 200；命中包含 DOC-TIE-001,DOC-TIE-002；并列分数按 doc_id 升序</td>
-      <td>200 hits=[&#39;DOC-TIE-002&#39;, &#39;DOC-TIE-001&#39;] recall@5=1.0000 MRR=1.0000</td>
-      <td><span class="badge fail">FAIL</span></td>
-      <td>14ms</td>
-      <td>
-        <div class="fail" style="font-size:12px">并列分数未按 doc_id 升序: DOC-TIE-002(rank1) 排在 DOC-TIE-001(rank2) 之前</div>
-        <div class="muted">指标：recall_at_k=1.0000，mrr=1.0000，hit_count=2.0000</div>
-        
-        <div class="muted">请求 GET /api/rag/search?q=duplicate&amp;top_k=5 -&gt; 200；hits=[(&#39;DOC-TIE-002&#39;, 1.439097, 1), (&#39;DOC-TIE-001&#39;, 1.439097, 2)]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 1}；recall@5=1.000000；MRR=1.000000</div>
-        
-      </td>
-    </tr>
-    
-    <tr>
-      <td>RAG-005</td>
-      <td>单次检索 hits 中不应出现重复 doc_id</td>
-      <td><span class="badge rag">rag</span></td>
-      <td>HTTP 200；命中包含 DOC-EN-001；hits 中无重复 doc_id</td>
-      <td>200 hits=[&#39;DOC-EN-001&#39;, &#39;DOC-EN-001&#39;] recall@5=1.0000 MRR=1.0000</td>
-      <td><span class="badge fail">FAIL</span></td>
-      <td>15ms</td>
-      <td>
-        <div class="fail" style="font-size:12px">hits 中重复出现的 doc_id: [&#39;DOC-EN-001&#39;]</div>
-        <div class="muted">指标：recall_at_k=1.0000，mrr=1.0000，hit_count=2.0000</div>
-        
-        <div class="muted">请求 GET /api/rag/search?q=vector database&amp;top_k=5 -&gt; 200；hits=[(&#39;DOC-EN-001&#39;, 1.762239, 1), (&#39;DOC-EN-001&#39;, 1.762239, 2)]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 1}；recall@5=1.000000；MRR=1.0000</div>
-        
-      </td>
-    </tr>
-    
-    <tr>
-      <td>RAG-006</td>
-      <td>文档删除后不应再被召回（索引与语料一致）</td>
-      <td><span class="badge rag">rag</span></td>
-      <td>HTTP 200；已删除文档不再被召回</td>
-      <td>删除后检索 hits=[&#39;DOC-EN-002&#39;, &#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]，ghost=[&#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]，index_size=12/corpu</td>
-      <td><span class="badge fail">FAIL</span></td>
-      <td>109ms</td>
-      <td>
-        <div class="fail" style="font-size:12px">删除后仍被召回（陈旧索引 ghost hit）: [&#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]；index_size=12 != corpus size=11（索引未与语料同步）</div>
-        <div class="muted">指标：ghost_hit_count=2.0000，index_size_after_delete=12.0000，corpus_size_after_delete=11.0000</div>
+        <div class="fail" style="font-size:12px">删除后仍被召回（陈旧索引 ghost hit）: [&#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]；index_size=13 != corpus size=12（索引未与语料同步）</div>
+        <div class="muted">指标：ghost_hit_count=2.0000，index_size_after_delete=13.0000，corpus_size_after_delete=12.0000</div>
         
         <div class="muted">一致性探针：新增 DOC-PROBE-TMP（201）→ 删除前命中 [&#39;DOC-EN-002&#39;, &#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;] → 删除后语料 [&#39;DOC-CN-001&#39;, &#39;DOC-CN-002&#39;, &#39;DOC-CN-003&#39;, &#39;DOC-CN-004&#39;, &#39;DOC-CN-005&#39;, &#39;DOC-EN-001&#39;, &#39;DOC-EN-002&#39;, &#39;DOC-EN-0</div>
         
@@ -534,70 +493,70 @@
     </tr>
     
     <tr>
-      <td>RAG-007</td>
-      <td>空查询 q 应返回 400（契约要求）</td>
+      <td>RAG-003</td>
+      <td>检索召回率与 MRR 达标</td>
       <td><span class="badge rag">rag</span></td>
-      <td>HTTP 400</td>
+      <td>HTTP 200；recall@k&gt;=1.0；MRR&gt;=0.5；rank 连续且 score 单调非增</td>
+      <td>200 hits=[&#39;DOC-CN-001&#39;, &#39;doc_alpha&#39;, &#39;doc_alpha&#39;] recall@3=1.0000 MRR=0.5000</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>2ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">score 非降序: rank2=1.799646 &lt; rank3=2.357254</div>
+        <div class="muted">指标：recall_at_k=1.0000，mrr=0.5000，hit_count=3.0000</div>
+        
+        <div class="muted">请求 GET /api/rag/search?q=python retry&amp;top_k=3 -&gt; 200；hits=[(&#39;DOC-CN-001&#39;, 1.799646, 1), (&#39;doc_alpha&#39;, 1.799646, 2), (&#39;doc_alpha&#39;, 2.357254, 3)]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 12, &#39;version&#39;: 5}；reca</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>RAG-004</td>
+      <td>空查询返回 400 契约校验</td>
+      <td><span class="badge rag">rag</span></td>
+      <td>HTTP 400；HTTP 状态码符合契约</td>
       <td>200 hits=[] recall@5=0.0000 MRR=0.0000</td>
       <td><span class="badge fail">FAIL</span></td>
-      <td>15ms</td>
+      <td>21ms</td>
       <td>
         <div class="fail" style="font-size:12px">状态码期望 400，实际 200</div>
         <div class="muted">指标：recall_at_k=0.0000，mrr=0.0000，hit_count=0.0000</div>
         
-        <div class="muted">请求 GET /api/rag/search?q=&amp;top_k=5 -&gt; 200；hits=[]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 4}；recall@5=0.000000；MRR=0.000000</div>
+        <div class="muted">请求 GET /api/rag/search?q=&amp;top_k=5 -&gt; 200；hits=[]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 12, &#39;version&#39;: 5}；recall@5=0.000000；MRR=0.000000</div>
         
       </td>
     </tr>
     
     <tr>
-      <td>RAG-008</td>
-      <td>top_k=0 应返回 400（契约要求）</td>
-      <td><span class="badge rag">rag</span></td>
-      <td>HTTP 400</td>
-      <td>200 hits=[] recall@0=0.0000 MRR=0.0000</td>
+      <td>UI-001</td>
+      <td>首页加载并展示待办列表容器</td>
+      <td><span class="badge ui">ui</span></td>
+      <td>Todo #todo-list</td>
+      <td>Todo: 页面文本不包含；#todo-list: 元素不存在</td>
       <td><span class="badge fail">FAIL</span></td>
-      <td>4ms</td>
+      <td>6530ms</td>
       <td>
-        <div class="fail" style="font-size:12px">状态码期望 400，实际 200</div>
-        <div class="muted">指标：recall_at_k=0.0000，mrr=0.0000，hit_count=2.0000</div>
+        <div class="fail" style="font-size:12px">UI 断言失败: Todo -&gt; 页面文本不包含 | #todo-list -&gt; 元素不存在</div>
         
-        <div class="muted">请求 GET /api/rag/search?q=vector database&amp;top_k=0 -&gt; 200；hits=[(&#39;DOC-EN-001&#39;, 1.762239, 1), (&#39;DOC-EN-001&#39;, 1.762239, 2)]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 4}；recall@0=0.000000；MRR=0.0000</div>
-        
+        <div class="warn muted">已重试 2 次</div>
+        <div class="muted">页面 http://127.0.0.1:5001/，DOM 摘要: AgentTest Demo — 智能待办清单 AgentTest Demo — 智能待办清单 这是一个供 Agent 自动测试演示用的待办清单应用。 登录 待办清单 version 1.0.0</div>
+        <img class="shot" src="screenshot_UI-001.png" alt="截图">
       </td>
     </tr>
     
     <tr>
-      <td>RAG-009</td>
-      <td>top_k 超过上限应返回 400（契约要求）</td>
-      <td><span class="badge rag">rag</span></td>
-      <td>HTTP 400</td>
-      <td>200 hits=[&#39;DOC-EN-001&#39;, &#39;DOC-EN-001&#39;] recall@999=0.0000 MRR=0.0000</td>
-      <td><span class="badge fail">FAIL</span></td>
-      <td>3ms</td>
+      <td>UI-002</td>
+      <td>页面展示健康状态文本</td>
+      <td><span class="badge ui">ui</span></td>
+      <td>body</td>
+      <td>全部断言通过</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>1746ms</td>
       <td>
-        <div class="fail" style="font-size:12px">状态码期望 400，实际 200</div>
-        <div class="muted">指标：recall_at_k=0.0000，mrr=0.0000，hit_count=2.0000</div>
         
-        <div class="muted">请求 GET /api/rag/search?q=vector database&amp;top_k=999 -&gt; 200；hits=[(&#39;DOC-EN-001&#39;, 1.762239, 1), (&#39;DOC-EN-001&#39;, 1.762239, 2)]；index={&#39;backend&#39;: &#39;bm25&#39;, &#39;size&#39;: 11, &#39;version&#39;: 4}；recall@999=0.000000；MRR=0.</div>
         
-      </td>
-    </tr>
-    
-    <tr>
-      <td>RAG-010</td>
-      <td>超长 q（240 字符）应返回 400（契约要求）</td>
-      <td><span class="badge rag">rag</span></td>
-      <td>HTTP 400</td>
-      <td>200 hits=[] recall@5=0.0000 MRR=0.0000</td>
-      <td><span class="badge fail">FAIL</span></td>
-      <td>23ms</td>
-      <td>
-        <div class="fail" style="font-size:12px">状态码期望 400，实际 200</div>
-        <div class="muted">指标：recall_at_k=0.0000，mrr=0.0000，hit_count=0.0000</div>
         
-        <div class="muted">请求 GET /api/rag/search?q=契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边界契约边</div>
-        
+        <div class="muted">页面 http://127.0.0.1:5001/，DOM 摘要: AgentTest Demo — 智能待办清单 AgentTest Demo — 智能待办清单 这是一个供 Agent 自动测试演示用的待办清单应用。 登录 待办清单 version 1.0.0</div>
+        <img class="shot" src="screenshot_UI-002.png" alt="截图">
       </td>
     </tr>
     
@@ -611,102 +570,108 @@
     
     <tr><td>POST /api/login</td><td>API-002, API-003, API-004</td></tr>
     
-    <tr><td>GET /api/todos</td><td>API-005, API-006</td></tr>
+    <tr><td>POST /api/todos</td><td>API-005, API-006, API-007</td></tr>
     
-    <tr><td>POST /api/todos</td><td>API-007, API-008, API-009</td></tr>
+    <tr><td>GET /api/todos</td><td>API-008, API-009</td></tr>
     
-    <tr><td>GET /api/todos/1</td><td>API-010</td></tr>
+    <tr><td>GET /api/todos/999999</td><td>API-010</td></tr>
     
-    <tr><td>GET /api/todos/99999</td><td>API-011</td></tr>
+    <tr><td>PATCH /api/todos/1</td><td>API-011, API-012</td></tr>
     
-    <tr><td>PATCH /api/todos/2</td><td>API-012, API-013</td></tr>
+    <tr><td>PATCH /api/todos/999999</td><td>API-013</td></tr>
     
-    <tr><td>DELETE /api/todos/99999</td><td>API-014</td></tr>
+    <tr><td>DELETE /api/todos/1</td><td>API-014</td></tr>
     
-    <tr><td>GET /api/flaky</td><td>API-015</td></tr>
+    <tr><td>DELETE /api/todos/999999</td><td>API-015</td></tr>
     
-    <tr><td>RAG GET /api/rag/search</td><td>RAG-001, RAG-002, RAG-003, RAG-004, RAG-005, RAG-006, RAG-007, RAG-008, RAG-009, RAG-010</td></tr>
+    <tr><td>GET /api/stats</td><td>API-016</td></tr>
+    
+    <tr><td>GET /api/flaky</td><td>API-017</td></tr>
+    
+    <tr><td>GET /api/rag/index</td><td>API-018, RAG-002</td></tr>
+    
+    <tr><td>POST /api/rag/docs</td><td>API-019, RAG-002</td></tr>
+    
+    <tr><td>DELETE /api/rag/docs/doc_missing</td><td>API-020</td></tr>
+    
+    <tr><td>GET /api/rag/search</td><td>RAG-001, RAG-002, RAG-003, RAG-004</td></tr>
+    
+    <tr><td>DELETE /api/rag/docs/{doc_id}</td><td>RAG-002</td></tr>
+    
+    <tr><td>POST /api/rag/reindex</td><td>RAG-002</td></tr>
+    
+    <tr><td>UI http://127.0.0.1:5001/</td><td>UI-001, UI-002</td></tr>
     
   </table>
 
   <h2>🧠 Agent 思考轨迹（trace）</h2>
   <div class="trace">
     
-    <div>[planner] mock 生成 28 条测试用例（--no-ui 过滤后 25 条）</div>
+    <div>[planner] llm 生成 26 条测试用例</div>
     
-    <div>[executor] PASS API-001 健康检查应返回 200 (期望 200 / 实际 200 {&#39;status&#39;: &#39;ok&#39;, &#39;time&#39;: &#39;2026-10-13T09:30:49.740307+00:00&#39;, &#39;version&#39;: &#39;1.0.0&#39;} / 19ms)</div>
+    <div>[executor] PASS API-001 健康检查返回 200 (期望 200 / 实际 200 {&#39;status&#39;: &#39;ok&#39;, &#39;time&#39;: &#39;2026-10-23T05:18:53.493428+00:00&#39;, &#39;version&#39;: &#39;1.0.0&#39;} / 21ms)</div>
     
-    <div>[executor] PASS API-002 正确凭据登录应返回 200 和 token (期望 200 / 实际 200 {&#39;token&#39;: &#39;demo-token-123&#39;, &#39;user&#39;: &#39;admin&#39;} / 3ms)</div>
+    <div>[executor] PASS API-002 正确凭据登录成功并返回 token (期望 200 / 实际 200 {&#39;token&#39;: &#39;demo-token-123&#39;, &#39;user&#39;: &#39;admin&#39;} / 15ms)</div>
     
-    <div>[executor] PASS API-003 错误密码登录应返回 401 (期望 401 / 实际 401 {&#39;error&#39;: &#39;invalid credentials&#39;} / 28ms)</div>
+    <div>[executor] PASS API-003 错误密码登录返回 401 (期望 401 / 实际 401 {&#39;error&#39;: &#39;invalid credentials&#39;} / 15ms)</div>
     
-    <div>[executor] PASS API-004 缺参数登录应返回 400 (期望 400 / 实际 400 {&#39;error&#39;: &#39;username and password are required&#39;} / 3ms)</div>
+    <div>[executor] PASS API-004 登录缺少 password 字段返回 400 (期望 400 / 实际 400 {&#39;error&#39;: &#39;username and password are required&#39;} / 15ms)</div>
     
-    <div>[executor] PASS API-005 查询待办列表应返回 200 (期望 200 / 实际 200 {&#39;count&#39;: 2, &#39;data&#39;: [{&#39;created_at&#39;: &#39;2026-10-13T09:30:49.682017+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}, {&#39;created_at&#39;: &#39;2026-10-13T09:30:49.683586+00:00 / 27ms)</div>
+    <div>[executor] PASS API-005 创建待办返回 201 (期望 201 / 实际 201 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:53.555980+00:00&#39;, &#39;id&#39;: 3, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;buy milk&#39;}} / 16ms)</div>
     
-    <div>[executor] FAIL API-006 非法 status 过滤应返回 400（契约要求） (期望 400 / 实际 500 {&#39;error&#39;: &#39;internal error: unexpected status filter&#39;} / 946ms / 重试2次)</div>
+    <div>[executor] FAIL API-006 创建待办缺少 title 返回 400 (期望 400 / 实际 200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:53.571980+00:00&#39;, &#39;id&#39;: 4, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;(empty)&#39;}, &#39;warning&#39;: &#39;created with empty title&#39;} / 15ms)</div>
     
-    <div>[executor] PASS API-007 创建合法待办应返回 201 (期望 201 / 实际 201 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:50.755114+00:00&#39;, &#39;id&#39;: 3, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;由 Agent 自动测试创建的待办&#39;}} / 3ms)</div>
+    <div>[executor] FAIL API-007 创建待办 title 为超长字符串（256 字符）边界校验 (期望 400 / 实际 201 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:53.588025+00:00&#39;, &#39;id&#39;: 5, &#39;priority&#39;: &#39;low&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA / 15ms)</div>
     
-    <div>[executor] FAIL API-008 空 title 创建应返回 400（契约要求） (期望 400 / 实际 200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:50.756669+00:00&#39;, &#39;id&#39;: 4, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;(empty)&#39;}, &#39;warning&#39;: &#39;created with empty title&#39;} / 3ms)</div>
+    <div>[executor] PASS API-008 查询待办列表返回 200 (期望 200 / 实际 200 {&#39;count&#39;: 5, &#39;data&#39;: [{&#39;created_at&#39;: &#39;2026-10-23T05:18:42.192138+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}, {&#39;created_at&#39;: &#39;2026-10-23T05:18:42.192138+00:00 / 2ms)</div>
     
-    <div>[executor] PASS API-009 非法 priority 应返回 400 (期望 400 / 实际 400 {&#39;error&#39;: &#39;invalid priority&#39;} / 3ms)</div>
+    <div>[executor] FAIL API-009 按非法 status 过滤待办返回 400 (期望 400 / 实际 500 {&#39;error&#39;: &#39;internal error: unexpected status filter&#39;} / 939ms / 重试2次)</div>
     
-    <div>[executor] PASS API-010 查询存在的待办应返回 200 (期望 200 / 实际 200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:49.682017+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}} / 3ms)</div>
+    <div>[executor] PASS API-010 查询不存在的待办返回 404 (期望 404 / 实际 404 {&#39;error&#39;: &#39;todo not found&#39;} / 16ms)</div>
     
-    <div>[executor] PASS API-011 查询不存在的待办应返回 404 (期望 404 / 实际 404 {&#39;error&#39;: &#39;todo not found&#39;} / 3ms)</div>
+    <div>[executor] PASS API-011 更新待办状态为 done 返回 200 (期望 200 / 实际 200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-23T05:18:42.192138+00:00&#39;, &#39;id&#39;: 1, &#39;priority&#39;: &#39;high&#39;, &#39;status&#39;: &#39;done&#39;, &#39;title&#39;: &#39;学习 LangGraph 状态图&#39;}} / 15ms)</div>
     
-    <div>[executor] PASS API-012 更新待办状态应返回 200 (期望 200 / 实际 200 {&#39;data&#39;: {&#39;created_at&#39;: &#39;2026-10-13T09:30:49.683586+00:00&#39;, &#39;id&#39;: 2, &#39;priority&#39;: &#39;medium&#39;, &#39;status&#39;: &#39;active&#39;, &#39;title&#39;: &#39;写 Agent 测试用例&#39;}} / 3ms)</div>
+    <div>[executor] PASS API-012 更新待办为非法状态返回 400 (期望 400 / 实际 400 {&#39;error&#39;: &#39;invalid status&#39;} / 14ms)</div>
     
-    <div>[executor] PASS API-013 非法状态更新应返回 400 (期望 400 / 实际 400 {&#39;error&#39;: &#39;invalid status&#39;} / 3ms)</div>
+    <div>[executor] PASS API-013 更新不存在待办返回 404 (期望 404 / 实际 404 {&#39;error&#39;: &#39;todo not found&#39;} / 16ms)</div>
     
-    <div>[executor] PASS API-014 删除不存在的待办应返回 404 (期望 404 / 实际 404 {&#39;error&#39;: &#39;todo not found&#39;} / 2ms)</div>
+    <div>[executor] PASS API-014 删除待办返回 204 (期望 204 / 实际 204  / 15ms)</div>
     
-    <div>[executor] PASS API-015 不稳定服务应最终成功（自动重试） (期望 200 / 实际 200 {&#39;flaky&#39;: True, &#39;ok&#39;: True} / 307ms / 重试1次)</div>
+    <div>[executor] PASS API-015 删除不存在待办返回 404 (期望 404 / 实际 404 {&#39;error&#39;: &#39;todo not found&#39;} / 2ms)</div>
     
-    <div>[executor] FAIL RAG-001 中文查询应召回相关文档且 recall@5 达标 (期望 HTTP 200；命中包含 DOC-CN-002；recall@k&gt;=1.0；MRR&gt;=1.0 / 实际 200 hits=[] recall@5=0.0000 MRR=0.0000 / 4ms)</div>
+    <div>[executor] PASS API-016 待办统计返回 200 (期望 200 / 实际 200 {&#39;active&#39;: 3, &#39;done&#39;: 1, &#39;total&#39;: 4} / 12ms)</div>
     
-    <div>[executor] PASS RAG-002 英文查询检索质量达标（recall@5 与 MRR） (期望 HTTP 200；命中包含 DOC-EN-004,DOC-EN-001；recall@k&gt;=1.0；MRR&gt;=1.0 / 实际 200 hits=[&#39;DOC-EN-004&#39;, &#39;DOC-EN-001&#39;, &#39;DOC-EN-004&#39;, &#39;DOC-EN-004&#39;] recall@5=1.0000 MRR=1.0000 / 20ms)</div>
+    <div>[executor] PASS API-017 不稳定接口重试后最终成功（10% 503 场景） (期望 200 / 实际 200 {&#39;flaky&#39;: True, &#39;ok&#39;: True} / 15ms)</div>
     
-    <div>[executor] FAIL RAG-003 检索结果应按 score 降序（rank 单调） (期望 HTTP 200；rank 连续且 score 单调非增 / 实际 200 hits=[&#39;DOC-EN-004&#39;, &#39;DOC-EN-001&#39;, &#39;DOC-EN-004&#39;, &#39;DOC-EN-004&#39;] recall@5=0.0000 MRR=0.0000 / 15ms)</div>
+    <div>[executor] PASS API-018 RAG 索引元信息返回 200 且含 backend 字段 (期望 200 / 实际 200 {&#39;backend&#39;: &#39;bm25&#39;, &#39;doc_ids&#39;: [&#39;DOC-CN-001&#39;, &#39;DOC-CN-002&#39;, &#39;DOC-CN-003&#39;, &#39;DOC-CN-004&#39;, &#39;DOC-CN-005&#39;, &#39;DOC-EN-001&#39;, &#39;DOC-EN-002&#39;, &#39;DOC-EN-003&#39;, &#39;DOC-EN-004&#39;, &#39;DOC-TIE-001&#39;, &#39;DOC-TIE-002&#39;], &#39;fallback&#39;: / 2ms)</div>
     
-    <div>[executor] FAIL RAG-004 分数并列时 rank 应按 doc_id 稳定排序 (期望 HTTP 200；命中包含 DOC-TIE-001,DOC-TIE-002；并列分数按 doc_id 升序 / 实际 200 hits=[&#39;DOC-TIE-002&#39;, &#39;DOC-TIE-001&#39;] recall@5=1.0000 MRR=1.0000 / 14ms)</div>
+    <div>[executor] PASS API-019 新增语料文档返回 201 (期望 201 / 实际 201 {&#39;data&#39;: {&#39;doc_id&#39;: &#39;doc_alpha&#39;, &#39;text&#39;: &#39;python retry backoff strategy&#39;}, &#39;upserted&#39;: False, &#39;version&#39;: 2} / 13ms)</div>
     
-    <div>[executor] FAIL RAG-005 单次检索 hits 中不应出现重复 doc_id (期望 HTTP 200；命中包含 DOC-EN-001；hits 中无重复 doc_id / 实际 200 hits=[&#39;DOC-EN-001&#39;, &#39;DOC-EN-001&#39;] recall@5=1.0000 MRR=1.0000 / 15ms)</div>
+    <div>[executor] PASS API-020 删除不存在语料文档返回 404 (期望 404 / 实际 404 {&#39;error&#39;: &#39;document not found&#39;} / 2ms)</div>
     
-    <div>[executor] FAIL RAG-006 文档删除后不应再被召回（索引与语料一致） (期望 HTTP 200；已删除文档不再被召回 / 实际 删除后检索 hits=[&#39;DOC-EN-002&#39;, &#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]，ghost=[&#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]，index_size=12/corpus_size=11 / 109ms)</div>
+    <div>[executor] FAIL RAG-001 检索命中已入库文档且排序单调 (期望 HTTP 200；命中包含 doc_alpha；rank 连续且 score 单调非增；hits 中无重复 doc_id / 实际 200 hits=[&#39;doc_alpha&#39;, &#39;doc_alpha&#39;] recall@5=1.0000 MRR=1.0000 / 14ms)</div>
     
-    <div>[executor] FAIL RAG-007 空查询 q 应返回 400（契约要求） (期望 HTTP 400 / 实际 200 hits=[] recall@5=0.0000 MRR=0.0000 / 15ms)</div>
+    <div>[executor] FAIL RAG-002 删除文档后不得再被召回（索引同步） (期望 HTTP 200；已删除文档不再被召回；hits 中无重复 doc_id / 实际 删除后检索 hits=[&#39;DOC-EN-002&#39;, &#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]，ghost=[&#39;DOC-PROBE-TMP&#39;, &#39;DOC-PROBE-TMP&#39;]，index_size=13/corpus_size=12 / 66ms)</div>
     
-    <div>[executor] FAIL RAG-008 top_k=0 应返回 400（契约要求） (期望 HTTP 400 / 实际 200 hits=[] recall@0=0.0000 MRR=0.0000 / 4ms)</div>
+    <div>[executor] FAIL RAG-003 检索召回率与 MRR 达标 (期望 HTTP 200；recall@k&gt;=1.0；MRR&gt;=0.5；rank 连续且 score 单调非增 / 实际 200 hits=[&#39;DOC-CN-001&#39;, &#39;doc_alpha&#39;, &#39;doc_alpha&#39;] recall@3=1.0000 MRR=0.5000 / 2ms)</div>
     
-    <div>[executor] FAIL RAG-009 top_k 超过上限应返回 400（契约要求） (期望 HTTP 400 / 实际 200 hits=[&#39;DOC-EN-001&#39;, &#39;DOC-EN-001&#39;] recall@999=0.0000 MRR=0.0000 / 3ms)</div>
+    <div>[executor] FAIL RAG-004 空查询返回 400 契约校验 (期望 HTTP 400；HTTP 状态码符合契约 / 实际 200 hits=[] recall@5=0.0000 MRR=0.0000 / 21ms)</div>
     
-    <div>[executor] FAIL RAG-010 超长 q（240 字符）应返回 400（契约要求） (期望 HTTP 400 / 实际 200 hits=[] recall@5=0.0000 MRR=0.0000 / 23ms)</div>
+    <div>[executor] FAIL UI-001 首页加载并展示待办列表容器 (期望 Todo #todo-list / 实际 Todo: 页面文本不包含；#todo-list: 元素不存在 / 6530ms / 重试2次)</div>
     
-    <div>[critic] 失败 11/25，归因出 11 个缺陷</div>
+    <div>[executor] PASS UI-002 页面展示健康状态文本 (期望 body / 实际 全部断言通过 / 1746ms)</div>
     
-    <div>[critic]   DEF-001 [high/contract] 契约不符：非法参数应返回 400 却返回 500 @ API 非法 status 过滤应返回 400（契约要求）</div>
+    <div>[critic] 失败 8/26，归因出 5 个缺陷</div>
     
-    <div>[critic]   DEF-002 [high/bug] 缺失参数校验：空值被接受并写入数据 @ API 空 title 创建应返回 400（契约要求）</div>
+    <div>[critic]   DEF-001 [high/contract] 创建待办接口未校验 title：空 title 被放行创建、超长 title 未做长度边界校验 @ POST /api/todos</div>
     
-    <div>[critic]   DEF-003 [high/relevance] 检索召回质量缺陷：相关文档未被召回或排名过低 @ RAG 中文查询应召回相关文档且 recall@5 达标</div>
+    <div>[critic]   DEF-002 [high/bug] GET /api/todos 对非法 status 过滤值未做入参校验，直接抛 500 内部错误 @ GET /api/todos</div>
     
-    <div>[critic]   DEF-004 [high/relevance] 检索排序缺陷：score 未降序或并列时次序不稳定 @ RAG 检索结果应按 score 降序（rank 单调）</div>
+    <div>[critic]   DEF-003 [critical/relevance] RAG 检索索引与语料不同步：同一 doc_id 重复召回、删除后仍命中陈旧索引，且结果 score 非单调 @ GET /api/rag/search</div>
     
-    <div>[critic]   DEF-005 [high/relevance] 检索排序缺陷：score 未降序或并列时次序不稳定 @ RAG 分数并列时 rank 应按 doc_id 稳定排序</div>
+    <div>[critic]   DEF-004 [medium/contract] RAG 检索空查询未按契约返回 400，而是返回 200 空结果 @ GET /api/rag/search</div>
     
-    <div>[critic]   DEF-006 [medium/bug] 检索去重缺陷：同一文档在 hits 中重复出现 @ RAG 单次检索 hits 中不应出现重复 doc_id</div>
-    
-    <div>[critic]   DEF-007 [high/relevance] 索引一致性缺陷：文档删除后仍被检索召回（陈旧索引） @ RAG 文档删除后不应再被召回（索引与语料一致）</div>
-    
-    <div>[critic]   DEF-008 [high/contract] 检索接口契约缺陷：非法入参未按契约返回 400 @ RAG 空查询 q 应返回 400（契约要求）</div>
-    
-    <div>[critic]   DEF-009 [high/contract] 检索接口契约缺陷：非法入参未按契约返回 400 @ RAG top_k=0 应返回 400（契约要求）</div>
-    
-    <div>[critic]   DEF-010 [high/contract] 检索接口契约缺陷：非法入参未按契约返回 400 @ RAG top_k 超过上限应返回 400（契约要求）</div>
-    
-    <div>[critic]   DEF-011 [high/contract] 检索接口契约缺陷：非法入参未按契约返回 400 @ RAG 超长 q（240 字符）应返回 400（契约要求）</div>
+    <div>[critic]   DEF-005 [high/bug] 首页未渲染待办列表容器，页面缺少 Todo 文案与 #todo-list 元素 @ GET / (http://127.0.0.1:5001/)</div>
     
   </div>
 </main>
