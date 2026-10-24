@@ -59,6 +59,7 @@ jobs:
       - name: 检查 secret 是否配置
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
         run: |
           if [ -z "$LLM_API_KEY" ]; then
             echo "::error::仓库 secret LLM_API_KEY 未配置。"
@@ -67,12 +68,20 @@ jobs:
             echo "一个静默跳过的冒烟等于没有冒烟，点按钮的人会以为跑过了。"
             exit 1
           fi
+          if [ -z "$LLM_BASE_URL" ]; then
+            echo "::warning::secret LLM_BASE_URL 未配置，将回退到 OpenAI 官方端点。"
+            echo "::warning::如果你的 key 不是 OpenAI 官方签发的（例如 DeepSeek / 中转网关），必须配上它，"
+            echo "::warning::否则这里会以 401 / 404 失败——那是端点不对，不是代码坏了。"
+          fi
 
       - name: 跑 LLM 冒烟（结构契约，不判结果好坏）
         env:
           AGENTTEST_LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          AGENTTEST_LLM_MODEL: ${{ inputs.model }}
-          AGENTTEST_LLM_BASE_URL: ${{ inputs.base_url }}
+          # 三个口径的优先级：手动触发时填的 inputs > 仓库 secrets > 代码里的默认值。
+          # 为什么 secrets 也要参与：workflow_dispatch 的输入框每次都要手填，
+          # 少填一次就会静默回退到 api.openai.com，而这里用的是 DeepSeek 的 key。
+          AGENTTEST_LLM_MODEL: ${{ inputs.model || secrets.LLM_MODEL || 'deepseek-chat' }}
+          AGENTTEST_LLM_BASE_URL: ${{ inputs.base_url || secrets.LLM_BASE_URL }}
         run: |
           python -m pytest tests/test_llm_smoke.py -v -o addopts= -m llm_smoke
 
