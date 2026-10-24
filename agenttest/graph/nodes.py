@@ -57,7 +57,20 @@ def make_executor(cfg: Config):
         report_dir = ctx["report_dir"]
         results: List[TestResult] = []
         trace: List[str] = []
-        for case in state["cases"]:
+
+        # 条件回边（retrier）会把待补跑的 case_id 放进 context。
+        # 非空 = 本轮是补跑，只跑这些用例，其余结果原样保留；
+        # 空 = 首轮，跑全量。不区分这两种情况，回边就退化成「全量重跑」，
+        # 既有额外耗时又会把已经通过的用例再赌一次。
+        retry_ids = set(ctx.get("retry_case_ids") or [])
+        if retry_ids:
+            cases = [c for c in state["cases"] if c.id in retry_ids]
+            trace_prefix = f"[executor] 补跑 {len(cases)} 条可重试用例（不重跑全量）"
+            trace.append(trace_prefix)
+        else:
+            cases = list(state["cases"])
+
+        for case in cases:
             start = time.perf_counter()
             attempts = 0
             last_detail: Dict[str, Any] = {"ok": False, "actual": "无响应", "error": "未执行"}
@@ -101,6 +114,18 @@ def make_executor(cfg: Config):
                 + (f" / 重试{attempts - 1}次" if retried else "")
                 + ")"
             )
+
+        if retry_ids:
+            # 补跑模式：按 case_id 覆盖旧结果，保持原始顺序（报告里用例次序不乱）。
+            merged = {r.case_id: r for r in state["results"]}
+            for r in results:
+                merged[r.case_id] = r
+            ordered = [merged[c.id] for c in state["cases"] if c.id in merged]
+            # 消费掉补跑清单：不清空的话条件边会认为「还有失败待补跑」，
+            # 在 retry_rounds 用完之前原地打转。
+            ctx.pop("retry_case_ids", None)
+            return {"results": ordered, "trace": trace}
+
         return {"results": results, "trace": trace}
 
     return executor

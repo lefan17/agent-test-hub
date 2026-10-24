@@ -94,7 +94,12 @@ class Config:
     ui_backend: str = "auto"  # auto | chrome | selenium
     chrome_path: str = ""
     report_dir: Path = field(default_factory=lambda: Path("reports"))
-    max_attempts: int = 3  # 失败/不稳定用例重试次数
+    max_attempts: int = 3  # 失败/不稳定用例重试次数（同一次执行内的连续退避）
+    # executor 之后的跨轮补跑轮数（LangGraph 条件回边 retrier -> executor）。
+    # 与 max_attempts 的区别：max_attempts 是同一抖动窗口内的连续重试，0.3/0.6/1.2s；
+    # 跨轮补跑把时间窗口拉开，专门给「偶发 5xx」留一次机会。默认 1 轮，
+    # 刻意不设大：轮次越多，越像在用重试掩盖真缺陷。
+    retry_rounds: int = 1
     workdir: Path = field(default_factory=Path.cwd)
     env: str = DEFAULT_ENV  # 当前配置档案：dev | staging | prod
 
@@ -150,5 +155,6 @@ class Config:
             chrome_path=pick("AGENTTEST_CHROME_PATH"),
             report_dir=Path(pick("AGENTTEST_REPORT_DIR", "reports")),
             max_attempts=pick_int("AGENTTEST_MAX_ATTEMPTS", 3),
+            retry_rounds=pick_int("AGENTTEST_RETRY_ROUNDS", 1),
             env=env_name,
         )

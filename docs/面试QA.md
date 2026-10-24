@@ -23,7 +23,21 @@
 ## Agent 方向
 
 **Q7：为什么用 LangGraph 而不是自己写 while 循环？**
-LangGraph 提供状态管理、节点化编排、条件跳转、流式观测（stream updates）与断点/重放能力，状态是显式的 TypedDict，节点是纯函数——可单测、可替换、可观测，工程上比手写循环可维护得多。
+
+先把**实际用到了什么**说清楚，再说为什么值：
+
+- **用到了**：显式 `AgentState`（TypedDict）、节点化编排（planner / executor / retrier / critic / reporter 五个节点，每个都是纯函数，输入 state 输出增量）、**一处条件边**、**一条回边**、`stream(stream_mode="updates")` 的逐节点观测。
+- **没用**：checkpointer（断点续跑）、`interrupt`（人工介入）、`Send`/subgraph（并行分发与子图）。这几项在 Q24 的「下一步」里，不是现在的能力。
+
+**条件边与回边具体是什么**（这是这个问题的真正答案，见 `agenttest/graph/build.py`）：
+
+executor 跑完后由 `_route_after_executor` 判断——若还存在「失败且状态码属于 5xx/无响应、且不是用例写错」的用例，并且补跑轮次没用完，就走向 `retrier`，`retrier` 再连回 `executor` 补跑**那一批失败的用例**（不重跑全量）；否则直接进 `critic`。轮次上限是 `Config.retry_rounds`（默认 1）。
+
+**为什么需要跨轮补跑，而不是只靠 executor 内的重试**：executor 内部 `max_attempts` 的重试是**同一次执行里的连续退避**（0.3s / 0.6s / 1.2s），对「服务端偶发 503」常常在整个抖动窗口里连续失败；跨轮补跑把时间窗口拉开，`/api/flaky`（10% 触发）这种概率性失败才有机会在第二轮通过，不至于被误判成缺陷。同时刻意把轮次压到 1——轮次越多越像在用重试掩盖真缺陷，重试用尽的失败照常进归因。
+
+**为什么这套比手写 while 循环好**：不是「因为 LangGraph 高级」，而是三件具体的事——① 状态是显式 TypedDict，节点是纯函数，可以单独测（`tests/test_graph_edges.py` 就是直接对图结构断言，不需要起服务）；② 补跑这个分支在图里是声明式的，读 `build.py` 一眼能看到有环，手写循环里这个 `while` 混在业务代码中，改起来容易漏；③ `stream_mode="updates"` 让每个节点的 trace 天然可观测，报告里能逐节点回放。
+
+**已知局限（必须主动说）**：没有 checkpointer，所以**进程中断后无法断点续跑**，只能整轮重来。这是我下一步要补的第一项。
 
 **Q8：planner/executor/critic/reporter 为什么这样切？**
 遵循「决策与执行分离」：planner 出计划、executor 只执行、critic 归因、reporter 产出，职责单一；任何一步都可以换实现（比如 planner 从规则引擎换 LLM），不影响其他节点。
@@ -59,7 +73,13 @@ OpenAI 兼容接口抽象（base_url + model + api_key），DeepSeek/OpenAI/通�
 零驱动、零下载、离线可用、对 CI 友好；Selenium 作为可选后端保留，体现对不同场景的取舍判断。
 
 **Q19：项目怎么验证自己是对的？**
-180 项 pytest：被测系统功能测试（含 15 项缺陷基准 xfail：API 与 RAG 检索缺陷面）、MockBrain 规划/归因单测、LLM 降级与缺陷关联用例白名单单测、工具集成测试（api_request / rag_search / rag_evaluate）、BM25 后端与检索指标纯函数单测、评测集端到端阈值判定（空标注 / 被测量缺失 / 召回为 0 都判失败）、coverage 端点映射声明与 `rag_tool` 真实调用的一致性、executor 断言求值层单测（API 双断言 / rag_status / 未实现断言必须失败（RAG、API、UI 三条求值路径）/ 指数退避 / 并发锁）、报告渲染测试、端到端测试（断言必须发现 contract+bug 两类缺陷）。本机实测 161 passed + 15 xfailed（不含 UI）；另有 4 条 UI 用例需要**能真正启动**的 Chrome，单独跑 `tests/test_ui_tool.py` 即可覆盖。
+**332 项 pytest**（本机实测：有 Key 全量 325 passed + 15 xfailed；`--ignore=tests/test_ui_tool.py` 321 passed + 15 xfailed；无 Key 时 4 条 LLM 冒烟 skip）：被测系统功能测试（含 15 项缺陷基准 xfail：API 与 RAG 检索缺陷面）、MockBrain 规划/归因单测、LLM 降级与缺陷关联用例白名单单测、工具集成测试（api_request / rag_search / rag_evaluate）、BM25 后端与检索指标纯函数单测、评测集端到端阈值判定（空标注 / 被测量缺失 / 召回为 0 都判失败）、coverage 端点映射声明与 `rag_tool` 真实调用的一致性、executor 断言求值层单测（API 双断言 / rag_status / 未实现断言必须失败（RAG、API、UI 三条求值路径）/ 指数退避 / 并发锁）、报告渲染测试、端到端测试（断言必须发现 contract+bug 两类缺陷）。
+
+**图结构本身也在被测**（2026-10-24 新增 `tests/test_graph_edges.py`，8 条）：编译后的图里必须真的存在 `executor → retrier/critic` 条件分支与 `retrier → executor` 回边；补跑只跑失败用例不重跑全量；补跑清单被消费不死循环；`invalid_case` 不补跑；「第一轮 503 / 第二轮 200」时该用例被救回 PASS。**这组测试的意义是让「文档写了什么」和「代码做了什么」被机器盯住**——之前正是这两者不一致。
+
+另有 4 条 UI 用例需要**能真正启动**的 Chrome，单独跑 `tests/test_ui_tool.py` 即可覆盖。
+
+**能验证的和不能验证的，要分清**：上面这些验证的是**代码是否正确**，不是**判断质量有多好**。归因准确率（Agent 把失败归到 bug/contract/flaky 这几类，归对了几条）**本项目没有度量**，因为没做变异测试（mutmut / cosmic-ray）。这是真实缺口，别把「332 项 pytest」说成「我的 Agent 判断准确」。真要做，得先有变异体再谈归因准确率。
 
 **Q20：RAG 检索链路怎么测？**
 三层断言，而不是只看 HTTP 200：
@@ -77,4 +97,14 @@ embedding 后端是可选项：相关依赖（如 openai / numpy）**延迟导�
 新增了 `relevance` 缺陷类别：检索失败不能笼统归成 test_issue（那是「测试自身的问题」）。排序/召回/索引一致性失败归 `relevance`，`top_k`/空 q 这类契约边界失败归 `contract`，去重失败归 `bug`——归因结果直接影响修复方向，归错类别等于白测。
 
 **Q24：下一步想怎么扩展？**
-① 接 LangGraph checkpointer 支持断点续跑/人工审核；② 用多 Agent（planner/执行/审查并行）；③ 把报告推送到钉钉/飞书/企业微信；④ 支持带鉴权系统与数据库断言；⑤ 接 Playwright 做交互级 UI 流；⑥ RAG 侧接入真实 embedding 后端做召回率对比评测（BM25 vs 向量），并加检索延迟/首屏分位指标。
+
+按「补真实缺口」而不是「堆功能」排：
+
+1. **接 LangGraph checkpointer 做断点续跑**——现在进程中断只能整轮重来，这是最实在的缺口。
+2. **补归因准确率的度量**——引入变异测试（mutmut / cosmic-ray）造变异体，再统计 Agent 把失败归到正确类别的比例。现在「332 项 pytest」验证的是代码对不对，不是判断准不准，这两件事不能混。
+3. **让 MockBrain 真的读 spec**——现在 `make_plan(goal, spec, context)` 的 `spec` 参数没有被使用，28 条用例是硬编码模板。不改成真的按 `spec.paths` 生成，就换不到别人的系统上。
+4. **UI 换成 Playwright 做交互级流程**——现在 Chrome `--dump-dom` + BeautifulSoup 是字符串匹配，没有点击与输入。
+5. 把报告推送到钉钉/飞书/企业微信；支持带鉴权系统与数据库断言。
+6. RAG 侧接入真实 embedding 后端做召回率对比评测（BM25 vs 向量），并加检索延迟/首屏分位指标。
+
+**明确没有的（别当成现有能力）**：`interrupt` 人工介入、`Send`/subgraph 并行分发、断点重放。这三项目前都不存在。

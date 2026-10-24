@@ -21,6 +21,43 @@
 依赖锁文件、pre-commit、协作模板、提交规范工具化、CI 定时与失败通知、
 环境分层。**不改任何业务逻辑与既有测试断言。**
 
+### 修复（2026-10-24：图里没有条件边和回边，而文档说有 —— 补上代码，不是改文档）
+
+**问题**：`docs/面试QA.md` 的 Q7 写着「LangGraph 提供条件跳转与断点/重放能力」，
+但 `agenttest/graph/build.py` 当时只有四条 `add_edge` 硬连：
+`planner→executor→critic→reporter→END`。全仓 grep
+`add_conditional_edges|checkpointer|interrupt` **零命中**。
+这是能被面试官打开文件 30 秒揭穿的硬伤，而且承认起来很难看：不是能力不足，
+是文档写了代码里没有的东西。
+
+**处理选择：改代码，而不是把文档那句话删掉。** 因为「agent 编排」这个定位如果
+只剩串行四节点，那它确实只是 while 循环套了个皮。补一条真实的条件边 + 回边之后，
+编排是真的，文档也就不用再洗。
+
+**改动**：
+
+- `agenttest/graph/build.py`：新增 `retrier` 节点 + `add_conditional_edges("executor", ...)`
+  + `add_edge("retrier", "executor")` 回边。路由函数 `_route_after_executor` 的判断是
+  「是否还存在 5xx/无响应失败 且 补跑轮次未用完」。
+- `agenttest/graph/nodes.py`：executor 支持「补跑模式」——`context["retry_case_ids"]`
+  非空时只跑这些用例，结果按原顺序覆盖合并，然后清空该键（不清空会死循环）。
+- `agenttest/config.py`：新增 `Config.retry_rounds`（默认 1，可用
+  `AGENTTEST_RETRY_ROUNDS` 覆盖）。刻意默认 1：轮次越多越像在用重试掩盖真缺陷。
+- `tests/test_graph_edges.py`（新增，8 条）：对图结构本身断言——条件分支与回边存在、
+  补跑只跑失败用例、清单被消费不死循环、`invalid_case` 不补跑、第一轮 503/第二轮
+  200 时用例被救回 PASS。全部打桩短路网络，0.98 秒跑完。
+
+**为什么值得做（而不是纯装饰）**：executor 内 `max_attempts` 的重试是**同一次执行
+里的连续退避**，对偶发 503 常常在整个抖动窗口内连续失败；跨轮补跑把时间窗口拉开，
+`/api/flaky`（10% 触发）才有第二次机会，不被误报成缺陷。
+
+**没有的东西仍然没有**：checkpointer（断点续跑）、`interrupt`（人工介入）、
+`Send`/subgraph（并行）。这三项已从 Q7 挪到 Q24「下一步」，不再声称是现有能力。
+
+**验证**：`321 passed / 15 xfailed`（`--ignore=tests/test_ui_tool.py`，新增 8 条后从
+313 涨到 321）；覆盖率 `TOTAL 1598 stmts / 446 branch / 92.07%`；`ruff` 全绿；
+`mypy` 24 个源文件无问题；`scripts/check_coverage.py` 16 个文件全部达标。
+
 ### 新增（2026-10-18：per-file 覆盖率门禁，补上仓库级门槛结构性看不见的那块）
 
 **先讲清为什么要做这件事。** 仓库级 `--cov-fail-under=70` 有一个结构性盲区：它只看总量。
