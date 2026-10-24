@@ -6,6 +6,10 @@
 >
 > 📄 **在线测试报告（GitHub Pages）**：https://lefan17.github.io/agent-test-hub/report.html
 >
+> 📊 **这份报告是真实 LLM 跑出来的**：页面标注 `Brain：llm（真实 LLM）`，一次运行 26 条用例、
+> 发现 5 个缺陷。brain 名、是否降级、起止时间等证据快照见 [`docs/evidence/`](docs/evidence/) ——
+> 这里是**真实 provider** 而非 Mock 兜底的证明。
+>
 > 🧪 **配套实践项目**：[software-testing-practice](https://github.com/lefan17/software-testing-practice) —— 契约驱动的接口自动化测试实践：Flask 被测系统 + 27 条登录接口 pytest 用例 + 用例设计/测试报告/SQL 数据校验文档（测试基本功配套仓库）
 >
 > ✅ **CI**：[![AgentTest Hub CI](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml/badge.svg)](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml) —— 6 个 job（测试+覆盖率双门槛 / mypy+ruff / 容器构建冒烟 / 依赖漏洞扫描 / 提交规范 / 失败通知），触发于 `push` / `pull_request` / 每周夜间回归 `schedule` / `workflow_dispatch`，见 `.github/workflows/test.yml`。
@@ -24,6 +28,21 @@
 > 接入 CI），负责回答"变慢了没有、门禁拦不拦得住"。本仓库接在最后：把**用例生成、执行与缺陷归因
 > 交给 LangGraph 编排的 Agent**——接口自动化 → 性能与质量门禁 → Agent 自动测试。
 
+## 30 秒速览
+
+| 问题 | 答案 |
+|---|---|
+| **解决什么** | 让 Agent 读 OpenAPI 契约生成测试用例、执行、归因缺陷、产出可视化报告（API + UI + RAG 三条链路） |
+| **真的调 LLM 吗** | 是。[在线报告](https://lefan17.github.io/agent-test-hub/report.html) 头部标 `Brain：llm（真实 LLM）`，一次运行 **26 条用例 / 18 通过 / 8 失败 / 5 个缺陷** |
+| **怎么证明没静默降级** | `brain_fallback_reason` 为空 + trace 首行 `[planner] llm 生成 26 条测试用例`；证据快照见 [`docs/evidence/`](docs/evidence/) |
+| **工程外壳** | Agent 编排（可配置重试轮次与真实回边）· 三层断言 · 覆盖率双门槛 · mypy + ruff · docker compose · 依赖漏洞扫描 |
+| **怎么跑** | `pip install -e .` → 配 `AGENTTEST_LLM_API_KEY` → `python -m agenttest.cli run --base-url http://127.0.0.1:5001` |
+| **不配 key 能跑吗** | 能（MockBrain + 纯标准库 BM25），但报告会**显式标注降级原因**，不伪装成真实 LLM |
+| **哪些是我自己写的** | 纯标准库 BM25（`demo_app/rag.py`）、检索质量评测口径（`agenttest/tools/rag_metrics.py`）、6 类检索缺陷注入 |
+
+> 这一节只回答「它是什么、真调没调 LLM、怎么跑」。设计取舍与踩坑记录在下面各节，
+> 面试追问预案在 [`docs/面试QA.md`](docs/面试QA.md)。
+
 ## 为什么这个项目能同时投两个岗位
 
 | 视角 | 体现的能力 | 对应简历点 |
@@ -37,7 +56,7 @@
 - **API + UI + RAG 三覆盖**：接口断言 + 真实浏览器（Chrome 无头）渲染断言与截图 + 检索链路质量断言（recall@k / MRR / 排序 / 去重 / 索引一致性）
 - **检索质量可量化**：RAG 用例产出 recall@k 与 MRR 具体数值写入报告证据，可被 pytest 断言
 - **智能缺陷归因**：失败用例由 Brain（LLM 或规则引擎）自动归类为 bug / contract / flaky / environment / test_issue / relevance 六类。规则引擎覆盖全部六类：四类由 HTTP 语义映射（400→500 契约不符 / 400→200 校验缺失 / 503 flaky / 没拿到任何响应→environment），`test_issue` 与 `relevance` 分别兜 API 与 RAG 的其余失败
-- **自动重试**：对 5xx / 网络异常自动重试（指数退避），区分「不稳定」与「真缺陷」
+- **自动重试（两层）**：① executor 内对 5xx / 网络异常连续退避重试（0.3s/0.6s/1.2s，最多 `max_attempts=3`）；② 图级**条件回边**再补跑一轮（`retry_rounds=1`），只补跑失败的那批用例、不重跑全量，专门给 `/api/flaky` 这类概率性失败留第二次机会。两层都用尽才进归因——重试不掩盖真缺陷
 - **双 Brain 可切换**：`MockBrain`（规则引擎，离线可跑、演示确定性）+ `LLMBrain`（LangChain 结构化输出，接 DeepSeek/OpenAI/通义等）
 - **可观测**：报告含 Agent 思考轨迹（trace）、覆盖率、缺陷证据与截图（截图仅在 UI 用例真正跑通时产生）、以及「本轮是否降级为规则引擎」的显式声明
 - **自带被测系统**：Flask Demo 应用注入 2 个 API 契约缺陷 + 1 处 Flaky 注入 + 6 个 RAG 检索缺陷开关（覆盖 9 个缺陷面），Agent 演示「发现缺陷」而非「跑一遍全绿」
@@ -234,15 +253,17 @@ MockBrain，而 `brain_name` 仍是 `llm` —— 看起来像"模型服务不稳
 
 ## 测试套件
 
-采集数 **332**。计数取决于两个本机条件，下表都给出（Python 3.12.10 实测）：
+采集数 **340**。计数取决于两个本机条件，下表都给出（Python 3.12.10 实测）：
 
 | 本机条件 | 全量 `pytest -q` | `--ignore=tests/test_ui_tool.py` |
 | --- | --- | --- |
-| 有 Chrome + `.env` 里有 Key | **317 passed, 15 xfailed** | **313 passed, 15 xfailed** |
-| 有 Chrome、无 Key | 313 passed, 4 skipped, 15 xfailed | 309 passed, 4 skipped, 15 xfailed |
-| CI runner（无 Chrome、无 Key） | 309 passed, 8 skipped, 15 xfailed | 309 passed, 4 skipped, 15 xfailed |
+| 有 Chrome + `.env` 里有 Key | **325 passed, 15 xfailed** | **321 passed, 15 xfailed** |
+| 有 Chrome、无 Key | 321 passed, 4 skipped, 15 xfailed | 317 passed, 4 skipped, 15 xfailed |
+| CI runner（无 Chrome、无 Key） | 317 passed, 8 skipped, 15 xfailed | 317 passed, 4 skipped, 15 xfailed |
 
 差的 8 条 = 4 条真实浏览器用例（`@pytest.mark.skipif("not chrome_present()")`）+ 4 条真实 LLM 冒烟（`llm_smoke` marker，无 Key 时 skip）。**两次 skip 都不是「被禁用的测试」**：前者需要能起 Chrome 子进程，后者需要真实 provider Key，缺条件时跳过是正确行为，有 Key 时它们真跑并真的通过。
+
+> 本轮新增 8 条 `tests/test_graph_edges.py`：专测「图本身」——条件边与回边是否真的存在、补跑是否只跑失败用例、补跑清单会不会被消费掉（防死循环）、以及「第一轮 503 / 第二轮 200 时这条用例被救回为 PASS」这条业务价值。该文件用打桩把 api/rag 执行器全部短路，**0.98 秒跑完 8 条**，不依赖网络与服务。
 
 ```bash
 # 全量（含 UI）
@@ -255,8 +276,8 @@ MockBrain，而 `brain_name` 仍是 `llm` —— 看起来像"模型服务不稳
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing \
     --cov-report=json:.coverage.json --cov-fail-under=70
-#   → 有 Key：313 passed, 15 xfailed；无 Key：309 passed, 4 skipped, 15 xfailed
-#   → TOTAL 1558 stmts / 436 branch ≥ 91.22%（无 Key，CI 口径）
+#   → 有 Key：321 passed, 15 xfailed；无 Key：317 passed, 4 skipped, 15 xfailed
+#   → TOTAL 1598 stmts / 446 branch ≥ 91.22%（无 Key，CI 口径）
 #   → Required test coverage of 70.0% reached.
 
 # per-file 门禁（读上一条命令产出的 .coverage.json）
@@ -301,6 +322,7 @@ per-file 的门槛值要重新核一遍（分母变了，最低文件可能换�
 | `tests/test_ui_tool_errors.py` | **31** | UI 工具的**出错路径**（不依赖浏览器）：chrome 非零退出/空输出、无 Chrome 时抛 `UiUnavailableError`、未实现断言类型必须判失败（两个后端各测）、selenium 异常时 driver 仍 quit（2026-10-18 补） |
 | `tests/test_check_coverage_script.py` | **25** | per-file 门禁脚本自身的测试：配置缺失要退出 1 不是静默通过、排除路径写错要报错、失败输出按百分比升序、JSON 里改低 1pp 必须被抓到（2026-10-18 补） |
 | `tests/test_ui_tool.py` | 4 | UI 工具（**需能真正启动的 Chrome**；在禁止创建子进程的环境里这 4 条会失败，与代码无关） |
+| `tests/test_graph_edges.py` | **8**（2026-10-24 新增） | **图本身的行为**，不是节点行为：① 可重试集只取 5xx/无响应，业务 4xx 不补跑；② `invalid_case` 不补跑（用例写错重跑还是错）；③ 图级与节点级可重试集必须一致；④ 编译后的图里真的存在 `executor → retrier/critic` 条件分支与 `retrier → executor` 回边；⑤ `retry_rounds=0` 时不触发；⑥ 有可重试失败时恰好补跑一轮且只跑失败用例；⑦ 补跑清单被消费、不死循环；⑧ 第一轮 503 / 第二轮 200 时该用例被救回 PASS。全部用打桩短路网络，**0.98 秒**跑完 |
 
 15 项 xfail 是**缺陷基准**：用 `@pytest.mark.xfail(strict=True)` 包住「断言契约期望行为」的用例——缺陷存在则 xfail，缺陷被修好会 XPASS 报错提醒更新基准。另有「钉住当前实际行为」的用例直接断言缺陷现状。4 条 UI 用例的结果取决于运行环境：本机**装了** Chrome（`C:\Program Files\Google\Chrome\Application\chrome.exe`），能启动 Chrome 子进程时 4 条全部通过（即上表第一行：配了 Key 是 312 passed，无 Key 是 308 passed）；在禁止创建子进程的环境里它们会以 failed 收场（例如 `crashpad_client_win.cc:430 OpenProcess: 拒绝访问 (0x5)`），与代码无关，因此 CI 里那条全量命令设了 `continue-on-error`。
 
@@ -317,7 +339,9 @@ flowchart TD
     R --> G[LangGraph 状态图]
     G --> P[planner 生成测试计划]
     P --> E[executor 执行用例 + 自动重试]
-    E --> C[critic 失败归因 / 覆盖率]
+    E -->|还有 5xx 失败且轮次未用完| Rt[retrier 补跑一轮]
+    Rt --> E
+    E -->|无剩余可重试失败| C[critic 失败归因 / 覆盖率]
     C --> Rp[reporter 生成 HTML + JSON 报告]
     E -->|api_request| S
     E -->|rag_search RAG 工具| S
@@ -549,7 +573,16 @@ Agent 侧新增的 RAG 断言类型：`rag_hits_include` / `rag_rank_monotonic` 
 
 ## 工作原理
 
-### LangGraph 四节点流水线
+### LangGraph 五节点流水线（含一处条件边与一条回边）
+
+```mermaid
+flowchart LR
+    P[planner<br/>生成测试计划] --> E[executor<br/>执行用例 + 节点内重试]
+    E -->|还有 5xx/无响应失败<br/>且轮次未用完| R[retrier<br/>算出待补跑用例]
+    R -->|只补跑这批失败的<br/>不重跑全量| E
+    E -->|无可重试失败<br/>或轮次已用完| C[critic<br/>归因缺陷]
+    C --> RP[reporter<br/>HTML + JSON 报告]
+```
 
 ```mermaid
 sequenceDiagram
@@ -562,10 +595,26 @@ sequenceDiagram
     B-->>G: 28 条用例（15 API + 3 UI + 10 RAG）
     G->>T: api_request / ui_check / rag_search
     T-->>G: 结构化结果（status/body/DOM/hits）
+    Note over G: 条件边判：还有 5xx 失败吗？→ retrier 补跑一轮（retry_rounds 默认 1）
     G->>B: analyze_failures(失败结果)
     B-->>G: 缺陷列表（bug/contract/flaky/relevance）
     G->>G: reporter 产出 HTML+JSON 报告
 ```
+
+> **关于「有环」这件事**：executor 之后的出边是**条件分支**（`add_conditional_edges`），
+> 走 `retrier` 还是 `critic` 由 `_route_after_executor` 运行时决定；`retrier -> executor`
+> 是一条**真实的回边**。这两点在 `agenttest/graph/build.py` 里，由
+> `tests/test_graph_edges.py::test_graph_has_conditional_edge_and_back_edge` 机器化守卫——
+> 谁把条件边改回单条 `add_edge`，测试就红。
+>
+> **为什么需要跨轮补跑**：executor 内部的重试是**同一次执行里的连续退避**
+> （0.3s/0.6s/1.2s），对偶发 503 常常在整个抖动窗口内连续失败；跨轮补跑把时间
+> 窗口拉开，`/api/flaky`（10% 触发）这种概率性失败才有机会第二轮通过，不被误判成
+> 缺陷。轮次刻意压到 1（`Config.retry_rounds`）：轮次越多越像用重试掩盖真缺陷。
+>
+> **没有的东西，别当成有**：没有 checkpointer（进程中断无法断点续跑）、没有
+> `interrupt`（无人工介入）、没有 `Send`/subgraph（无并行分发）。这三项在
+> `docs/面试QA.md` 的 Q24「下一步」里。
 
 ### 设计要点（面试可直接讲）
 
@@ -573,7 +622,7 @@ sequenceDiagram
 2. **确定性工具层**：Agent 只负责「决策」（规划/归因），执行走确定性代码（requests / Chrome 无头 / BM25 检索），结果可复现——这是测试系统的基本要求。
 3. **结构化输出**：LLMBrain 用 `with_structured_output` 把 LLM 输出约束为 Pydantic 模型，杜绝自由文本解析的脆弱性。
 4. **可观测性**：每个节点写入 trace，报告呈现完整思考轨迹——调试、演示、面试都能用。
-5. **失败重试与归因分离**：5xx/网络错误自动重试（最多 3 次），仍失败才进入 critic 归因，避免把 Flaky 误报成 Bug。
+5. **失败重试与归因分离**：两层重试——① executor 内对 5xx/网络错误连续退避（最多 `max_attempts=3` 次）；② 图级条件回边补跑一轮（`retry_rounds=1`）。两层都用尽仍失败才进入 critic 归因，避免把 Flaky 误报成 Bug。补跑只针对「5xx/无响应且不是用例写错」的结果，业务 4xx 一律不补跑（那是确定性行为，重跑只会拖慢流水线）。
 6. **检索质量可量化**：RAG 断言不止看 HTTP 200，而是把 recall@k / MRR / rank 单调 / 并列稳定 / 去重 / ghost hit 变成可断言的指标——「检索效果变差」从主观描述变成可回归的数字。
 
 ## 项目结构
@@ -586,7 +635,7 @@ sequenceDiagram
 │  ├─ report/            # HTML 报告渲染
 │  ├─ config.py / models.py / runner.py   # config.py 含 dev/staging/prod 环境分层
 ├─ demo_app/             # 被测系统（Flask + OpenAPI + RAG 检索 + 注入缺陷）
-├─ tests/                # 项目自身 pytest（332 collected；4 条 UI 需浏览器、4 条 LLM 冒烟需 Key，缺条件时 skip，15 条缺陷基准 xfail）
+├─ tests/                # 项目自身 pytest（332 collected，以 `pytest --collect-only` 输出为准；4 条 UI 需浏览器、4 条 LLM 冒烟需 Key，缺条件时 skip，15 条缺陷基准 xfail）
 │  └─ test_llm_transport.py  # 钉「LLM 链路的 HTTP 客户端不吃代理环境变量」（5 条，含 1 条反向验证）
 ├─ docs/                 # 简历描述 / 面试 QA / 架构文档
 ├─ scripts/              # demo.bat / demo.sh 一键演示

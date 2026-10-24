@@ -1,0 +1,61 @@
+{
+  "schema": "evidence-summary@1",
+  "repo": "agent-test-hub",
+  "collected_at": "2026-10-24T18:48:12+08:00",
+  "source": "reports/report.json（一次真实 LLM 运行的完整报告）",
+  "produced_at": "2026-10-23 13:18:42",
+  "finished_at": "2026-10-23 13:19:10",
+  "reproduce": "python -m agenttest.cli run --base-url http://127.0.0.1:5001（需配 DEEPSEEK_API_KEY）",
+  "metrics": {
+    "brain": "llm",
+    "llm_configured": true,
+    "brain_fallback_reason": "",
+    "total": 26,
+    "passed": 18,
+    "failed": 8,
+    "defects": 5,
+    "cases_by_kind": {
+      "api": 20,
+      "rag": 4,
+      "ui": 2
+    },
+    "covered_endpoints": 18
+  },
+  "defects": [
+    {
+      "id": "DEF-001",
+      "severity": "high",
+      "category": "contract",
+      "title": "创建待办接口未校验 title：空 title 被放行创建、超长 title 未做长度边界校验"
+    },
+    {
+      "id": "DEF-002",
+      "severity": "high",
+      "category": "bug",
+      "title": "GET /api/todos 对非法 status 过滤值未做入参校验，直接抛 500 内部错误"
+    },
+    {
+      "id": "DEF-003",
+      "severity": "critical",
+      "category": "relevance",
+      "title": "RAG 检索索引与语料不同步：同一 doc_id 重复召回、删除后仍命中陈旧索引，且结果 score 非单调"
+    },
+    {
+      "id": "DEF-004",
+      "severity": "medium",
+      "category": "contract",
+      "title": "RAG 检索空查询未按契约返回 400，而是返回 200 空结果"
+    },
+    {
+      "id": "DEF-005",
+      "severity": "high",
+      "category": "bug",
+      "title": "首页未渲染待办列表容器，页面缺少 Todo 文案与 #todo-list 元素"
+    }
+  ],
+  "notes": [
+    "brain=llm 且 brain_fallback_reason 为空，trace 首行为「[planner] llm 生成 26 条测试用例」，证明这次是真实 LLM 路径，不是 MockBrain 兜底。",
+    "26 条是「一次运行发现的用例数」，与 pytest 套件的 332 条不是同一个计量对象，两者不要相加也不要互相替代。",
+    "RAG 指标（recall@5 = 4/7）来自 agenttest/tools/rag_metrics.py 的 7 条标注查询，样本量小，recall@5 在 k=5、语料 11 篇时退化为 hit@5，不要当成检索系统的通用结论。"
+  ]
+}
