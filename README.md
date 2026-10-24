@@ -14,7 +14,9 @@
 >
 > ✅ **CI**：[![AgentTest Hub CI](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml/badge.svg)](https://github.com/lefan17/agent-test-hub/actions/workflows/test.yml) —— 6 个 job（测试+覆盖率双门槛 / mypy+ruff / 容器构建冒烟 / 依赖漏洞扫描 / 提交规范 / 失败通知），触发于 `push` / `pull_request` / 每周夜间回归 `schedule` / `workflow_dispatch`，见 `.github/workflows/test.yml`。
 >
-> 🤖 **LLM 冒烟**：[llm-smoke.yml](.github/workflows/llm-smoke.yml)（**只挂 `workflow_dispatch`**，不进 PR 门禁）—— 真跑一次真实 provider 的规划+归因链路，断言结构契约而非结果好坏，理由见下文「真实 LLM 冒烟：为什么它不在 PR 门禁里」
+> 🤖 **LLM 冒烟**：[![LLM smoke](https://github.com/lefan17/agent-test-hub/actions/workflows/llm-smoke.yml/badge.svg)](https://github.com/lefan17/agent-test-hub/actions/workflows/llm-smoke.yml) —— [llm-smoke.yml](.github/workflows/llm-smoke.yml)（**只挂 `workflow_dispatch`**，不进 PR 门禁）—— 真跑一次真实 provider 的规划+归因链路，断言结构契约而非结果好坏，理由见下文「真实 LLM 冒烟：为什么它不在 PR 门禁里」
+>
+> 　**它在 Actions 上真跑过**：[run #40098709674](https://github.com/lefan17/agent-test-hub/actions/runs/40098709674)（2026-10-24）→ `5 passed in 56.11s`，用的是仓库 secret `LLM_API_KEY` + `LLM_BASE_URL`（DeepSeek），没有跳过、没有降级。
 >
 > 🐳 **容器化**：`docker compose --profile app up`（起被测系统）/ `--profile test up`（跑测试+覆盖率门槛）
 >
