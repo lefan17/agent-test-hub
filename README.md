@@ -43,6 +43,15 @@
 > 这一节只回答「它是什么、真调没调 LLM、怎么跑」。设计取舍与踩坑记录在下面各节，
 > 面试追问预案在 [`docs/面试QA.md`](docs/面试QA.md)。
 
+![在线测试报告首屏：Brain 标注 llm（真实 LLM），一次运行 26 条用例 / 18 通过 / 8 失败 / 5 个缺陷](docs/images/report-hero.png)
+
+<details>
+<summary>展开看执行轨迹（26 条用例逐条判定 + critic 归因出 5 个缺陷）</summary>
+
+![执行轨迹：首行是 [planner] llm 生成 26 条测试用例，末行是 [critic] 失败 8/26，归因出 5 个缺陷](docs/images/report-trace.png)
+
+</details>
+
 ## 为什么这个项目能同时投两个岗位
 
 | 视角 | 体现的能力 | 对应简历点 |
