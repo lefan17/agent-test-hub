@@ -70,6 +70,8 @@
 | `DEF-002` high/contract | `POST /pet` 的 `status` 传非法枚举值 `notastatus` 被接受并持久化 |
 | `DEF-003` high/contract | `GET /user/login` 不带凭据返回 200，还**建立了会话** |
 
+![对第三方 Petstore 契约的报告首屏：Brain 标注 llm（真实 LLM），被测系统是 https://petstore3.swagger.io/api/v3，20 条用例 / 16 通过 / 4 失败 / 4 个缺陷，其中 DEF-004 被标成 test_issue](docs/images/petstore-report.png)
+
 第四条（`GET /pet/1` 期望 200 实际 404）被 critic 自己判成 **`test_issue`** 而不是缺陷，
 理由是「该用例依赖固定 id=1 的数据，说明数据非自建」——把「我不知道那是你的测试数据」
 和「你的实现有问题」分开，比多报三条缺陷更能说明判断力。
