@@ -272,3 +272,66 @@ class TestEffectiveUiBackend:
         fake.write_text("", encoding="utf-8")
         cfg = Config(ui_backend="auto", chrome_path=str(fake))
         assert cfg._find_chrome() == str(fake)
+
+
+class TestChromeDiscovery:
+    r"""浏览器探测不能只认 Windows。
+
+    这里曾经只有四条 `C:\Program Files\...` 的绝对路径，于是 `_find_chrome()`
+    在 Linux / macOS 上必然返回空串，UI 渲染断言与截图在 CI 上整组 skip ——
+    「Agent 能做 UI 验证」这条能力从来没有在 CI 上被验证过。
+    而 GitHub 的 ubuntu runner 自带 Chrome，所以那不是环境限制，是逻辑写窄了。
+    """
+
+    def test_windows_paths_stay_first(self):
+        """Windows 路径必须仍排在前面：本机开发优先命中最常见的安装位置。"""
+        first = cfgmod.DEFAULT_CHROME_CANDIDATES[0].lower()
+        assert first.startswith("c:") and "program files" in first
+
+    def test_linux_and_macos_candidates_exist(self):
+        joined = " ".join(cfgmod.DEFAULT_CHROME_CANDIDATES)
+        assert "/usr/bin/google-chrome" in joined, "Linux 的常见位置必须列出来"
+        assert "/Applications/Google Chrome.app" in joined, "macOS 的常见位置必须列出来"
+
+    def test_path_command_is_used_when_no_absolute_path_exists(self, monkeypatch):
+        """装在 PATH 上但不在标准目录（nix / conda / 自建镜像）也要能找到。"""
+        monkeypatch.setattr(cfgmod, "DEFAULT_CHROME_CANDIDATES", ["/nonexistent/chrome"])
+        monkeypatch.setattr(
+            cfgmod.shutil,
+            "which",
+            lambda command: "/opt/bin/google-chrome" if command == "google-chrome" else None,
+        )
+        cfg = Config(ui_backend="auto", chrome_path="")
+        assert cfg._find_chrome() == "/opt/bin/google-chrome"
+
+    def test_absolute_path_wins_over_path_command(self, monkeypatch, tmp_path):
+        """两条通道都在时，标准安装路径优先 —— 顺序是可预期的。"""
+        fake = tmp_path / "chrome-binary"
+        fake.write_text("", encoding="utf-8")
+        monkeypatch.setattr(cfgmod, "DEFAULT_CHROME_CANDIDATES", [str(fake)])
+        monkeypatch.setattr(cfgmod.shutil, "which", lambda command: "/somewhere/else")
+        cfg = Config(ui_backend="auto", chrome_path="")
+        assert cfg._find_chrome() == str(fake)
+
+    def test_overrides_still_win(self, monkeypatch, tmp_path):
+        """显式配置永远是第一优先级。"""
+        explicit = tmp_path / "explicit-chrome"
+        explicit.write_text("", encoding="utf-8")
+        monkeypatch.setattr(cfgmod.shutil, "which", lambda command: "/somewhere/else")
+        cfg = Config(ui_backend="auto", chrome_path=str(explicit))
+        assert cfg._find_chrome() == str(explicit)
+
+    def test_nothing_found_returns_empty(self, monkeypatch):
+        """两头都找不到时返回空串，交给上层降级成 selenium。"""
+        monkeypatch.setattr(cfgmod, "DEFAULT_CHROME_CANDIDATES", ["/nonexistent/chrome"])
+        monkeypatch.setattr(cfgmod.shutil, "which", lambda command: None)
+        cfg = Config(ui_backend="auto", chrome_path="")
+        assert cfg._find_chrome() == ""
+        assert cfg.effective_ui_backend == "selenium"
+
+    def test_path_found_chrome_switches_backend(self, monkeypatch):
+        """PATH 上找到 Chrome 就该选 chrome 后端，而不是继续降级。"""
+        monkeypatch.setattr(cfgmod, "DEFAULT_CHROME_CANDIDATES", ["/nonexistent/chrome"])
+        monkeypatch.setattr(cfgmod.shutil, "which", lambda command: "/usr/bin/chromium")
+        cfg = Config(ui_backend="auto", chrome_path="")
+        assert cfg.effective_ui_backend == "chrome"
