@@ -118,25 +118,23 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      # UI 用例依赖真实 Chrome（tests/test_ui_tool.py 的 4 条）：
-      # 本仓的 Chrome 探测只认 Windows 安装路径（agenttest/config.py 的
-      # DEFAULT_CHROME_CANDIDATES），Linux runner 上必然探测不到，
-      # 因此这 4 条在 CI 里是 skipped 而不是 failed（实测 run 38936350756）。
-      # 但「能跑就跑」：浏览器与驱动版本漂移属于外部因素，与仓库代码无关，
-      # 因此设 continue-on-error: true —— UI 失败只标黄、不判红，不阻断整个流水线。
+      # UI 用例依赖真实 Chrome（tests/test_ui_tool.py 的 4 条）。
       #
+      # 历史：Chrome 探测原先只认 Windows 安装路径（四个 C:\Program Files 绝对路径），
+      # 于是这 4 条在 Linux runner 上必然 skipped —— 实测 run 38936350756 是
+      # 304 passed, 8 skipped。「Agent 能做 UI 渲染验证」这条能力因此从来没有在
+      # CI 上被验证过。issue #24 补了 Linux/macOS 候选路径 + PATH 兜底
+      # （shutil.which），ubuntu runner 自带 /usr/bin/google-chrome，现在能真跑。
+      #
+      # 但仍然设 continue-on-error: true —— 浏览器与驱动版本漂移属于外部因素，
+      # 与仓库代码无关；UI 失败只标黄、不判红，不阻断整个流水线。
       # 这不等于可以不管：日志里能看到这条命令的真实计数与报错。
-      # 但若环境能探测到 Chrome 却禁止它创建子进程（例如受限沙箱），
-      # 这 4 条会以 failed 收场，且与仓库代码无关。
-      # 实测：CI runner 上探测不到 Chrome → 304 passed, 8 skipped, 15 xfailed；
-      # 本机（Chrome 可用、可起子进程）→ 308 passed, 4 skipped, 15 xfailed。
-      # 其中 4 条 skipped 恒为 LLM 冒烟（`llm_smoke` marker，无 Key 时 skip）。
       # 这里跑全量套件（而非只跑 UI 文件），是为了让 CI 的这条命令与
       # README 的 `.venv/Scripts/python.exe -m pytest -q` 一一对应。
       #
       # 注意：这一步不加 --cov-fail-under。它跑的是全量套件，与上面那条
       # 「非 UI + 覆盖率门槛」的门禁是两件事，门槛只在上面那条命令上生效。
-      - name: 运行全量套件含 UI（CI runner 探测不到 Chrome，UI 用例 skip）
+      - name: 运行全量套件含 UI（Chrome 在 Linux 上也探测得到，UI 用例真跑）
         continue-on-error: true
         run: python -m pytest -o addopts= -q
 

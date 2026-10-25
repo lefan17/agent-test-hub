@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional
@@ -23,12 +24,36 @@ KNOWN_ENVS = ("dev", "staging", "prod")
 
 PROFILE_DIR = Path(__file__).resolve().parent.parent / "scripts" / "env"
 
+# 候选**绝对路径**：装到标准位置的情形。按"先 Windows、再 Linux、再 macOS"排，
+# 跨平台的仓库里把三个平台都列出来，探测逻辑才不依赖"跑在哪个系统上"这个隐含前提。
 DEFAULT_CHROME_CANDIDATES = [
+    # Windows
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    # Linux（GitHub 的 ubuntu runner 自带 google-chrome，路径就是第一条）
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/snap/bin/chromium",
+    # macOS
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
 ]
+
+# 候选**命令名**：装在 PATH 上、但不在标准位置的情形（nix / conda / 自建镜像）。
+# 光靠绝对路径会漏掉这一类，而它们恰恰是 CI 镜像里最常见的样子。
+CHROME_COMMANDS = (
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+    "chrome",
+    "msedge",
+)
 
 
 def _env(name: str, default: str = "") -> str:
@@ -119,11 +144,23 @@ class Config:
         return "chrome" if self._find_chrome() else "selenium"
 
     def _find_chrome(self) -> str:
+        """找可用的浏览器：显式配置 > 标准安装路径 > PATH 上的命令名。
+
+        第三条是这次补的。之前只查四个 Windows 路径，于是 `_find_chrome()` 在
+        Linux / macOS 上必然返回空串，UI 相关能力（`--dump-dom` 渲染断言、截图）
+        在 CI 上整组 skip —— 也就是说「Agent 能做 UI 渲染验证」这条能力
+        从来没有在 CI 上被验证过。而 GitHub 的 ubuntu runner 是自带 Chrome 的，
+        所以那不是环境限制，是探测逻辑写窄了。
+        """
         if self.chrome_path and Path(self.chrome_path).exists():
             return self.chrome_path
         for cand in DEFAULT_CHROME_CANDIDATES:
             if Path(cand).exists():
                 return cand
+        for command in CHROME_COMMANDS:
+            found = shutil.which(command)
+            if found:
+                return found
         return ""
 
     @classmethod
