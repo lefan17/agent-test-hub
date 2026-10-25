@@ -290,15 +290,21 @@ MockBrain，而 `brain_name` 仍是 `llm` —— 看起来像"模型服务不稳
 
 ## 测试套件
 
-采集数 **340**。计数取决于两个本机条件，下表都给出（Python 3.12.10 实测）：
+采集数 **361**。计数取决于「有没有 Chrome」与「有没有 Key」两个条件，下表都给出：
 
-| 本机条件 | 全量 `pytest -q` | `--ignore=tests/test_ui_tool.py` |
+| 环境 | 全量 `pytest -o addopts= -q` | `--ignore=tests/test_ui_tool.py` |
 | --- | --- | --- |
-| 有 Chrome + `.env` 里有 Key | **325 passed, 15 xfailed** | **321 passed, 15 xfailed** |
-| 有 Chrome、无 Key | 321 passed, 4 skipped, 15 xfailed | 317 passed, 4 skipped, 15 xfailed |
-| CI runner（无 Chrome、无 Key） | 317 passed, 8 skipped, 15 xfailed | 317 passed, 4 skipped, 15 xfailed |
+| 本机（有 Chrome + `.env` 里有 Key） | **346 passed, 15 xfailed** | **342 passed, 15 xfailed** |
+| CI runner（有 Chrome、无 Key；实测 run 40164876323） | **342 passed, 4 skipped, 15 xfailed** | **338 passed, 4 skipped, 15 xfailed** |
 
-差的 8 条 = 4 条真实浏览器用例（`@pytest.mark.skipif("not chrome_present()")`）+ 4 条真实 LLM 冒烟（`llm_smoke` marker，无 Key 时 skip）。**两次 skip 都不是「被禁用的测试」**：前者需要能起 Chrome 子进程，后者需要真实 provider Key，缺条件时跳过是正确行为，有 Key 时它们真跑并真的通过。
+差的 4 条是真实 LLM 冒烟（`llm_smoke` marker，无 Key 时 skip）。**这 4 条 skip 不是「被禁用的测试」**：它们需要真实 provider Key，缺条件时跳过是正确行为；配上 Key 后它们真跑并真的通过（见 `llm-smoke` workflow 的 run 记录）。
+
+> **2026-10-25 修正了一个持续很久的假象**：这张表原来有一行「CI runner（无 Chrome）→ 8 skipped」，
+> 把 4 条真实浏览器用例算成了「环境不具备」。实际上 GitHub 的 ubuntu runner 自带
+> `/usr/bin/google-chrome`，只是 `agenttest/config.py` 的候选路径只写了 Windows 的那四条
+> （issue #24）。补上 Linux/macOS 路径与 `shutil.which` 兜底之后，CI 上的
+> `342 - 338 = 4` 正是 `tests/test_ui_tool.py` 那 4 条 —— **UI 渲染断言在 Linux runner 上
+> 真的跑了、且全过**，「Agent 能做 UI 验证」这条能力从此在 CI 上有据可查。
 
 > 本轮新增 8 条 `tests/test_graph_edges.py`：专测「图本身」——条件边与回边是否真的存在、补跑是否只跑失败用例、补跑清单会不会被消费掉（防死循环）、以及「第一轮 503 / 第二轮 200 时这条用例被救回为 PASS」这条业务价值。该文件用打桩把 api/rag 执行器全部短路，**0.98 秒跑完 8 条**，不依赖网络与服务。
 
@@ -313,7 +319,7 @@ MockBrain，而 `brain_name` 仍是 `llm` —— 看起来像"模型服务不稳
 .venv/Scripts/python.exe -m pytest -o addopts= -q --ignore=tests/test_ui_tool.py \
     --cov=agenttest --cov=demo_app --cov-report=term-missing \
     --cov-report=json:.coverage.json --cov-fail-under=70
-#   → 有 Key：321 passed, 15 xfailed；无 Key：317 passed, 4 skipped, 15 xfailed
+#   → 有 Key：342 passed, 15 xfailed；无 Key：338 passed, 4 skipped, 15 xfailed
 #   → TOTAL 1598 stmts / 446 branch ≥ 91.22%（无 Key，CI 口径）
 #   → Required test coverage of 70.0% reached.
 
