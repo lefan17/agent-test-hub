@@ -55,6 +55,8 @@ def make_executor(cfg: Config):
         ctx = state["context"]
         base_url = ctx["base_url"]
         report_dir = ctx["report_dir"]
+        # 被测系统在公网时才需要（显式传、不读环境变量，理由见 api_tool）。
+        base_proxy = ctx.get("base_url_proxy", "") or ""
         results: List[TestResult] = []
         trace: List[str] = []
 
@@ -78,7 +80,7 @@ def make_executor(cfg: Config):
             while True:
                 attempts += 1
                 if case.kind == "api":
-                    last_detail = _run_api_case(case, base_url)
+                    last_detail = _run_api_case(case, base_url, base_proxy)
                 elif case.kind == "rag":
                     last_detail = _run_rag_case(case, base_url)
                 else:
@@ -164,14 +166,20 @@ def _check_label(check: Check) -> str:
     return labels.get(check.type, check.type)
 
 
-def _run_api_case(case: TestCase, base_url: str) -> Dict[str, Any]:
+def _run_api_case(case: TestCase, base_url: str, proxy: str = "") -> Dict[str, Any]:
     """执行一条 API 用例：状态码 + 响应体关键字段双断言。
 
     状态码不符即失败；`case.checks` 非空时还要逐条校验响应体关键字段
     （contains_text / title_contains / has_element），避免「状态码对了就算过」的假绿。
     """
     detail = api_request(
-        case.method, case.path, query=case.query, body=case.body, headers=case.headers, base_url=base_url
+        case.method,
+        case.path,
+        query=case.query,
+        body=case.body,
+        headers=case.headers,
+        base_url=base_url,
+        proxy=proxy,
     )
     actual = detail.get("status", 0)
     ok = bool(detail.get("ok")) and actual == case.expected_status

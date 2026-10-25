@@ -1,0 +1,526 @@
+{
+  "goal": "对一个第三方 OpenAPI 服务（Swagger Petstore - OpenAPI 3.0）执行接口自动化测试：按契约生成用例、发现契约与实现的偏差并给出缺陷归因",
+  "started_at": "2026-10-25 12:16:00",
+  "finished_at": "2026-10-25 12:16:36",
+  "brain_name": "llm",
+  "llm_configured": true,
+  "brain_fallback_reason": "",
+  "base_url": "https://petstore3.swagger.io/api/v3",
+  "summary": {
+    "total": 20,
+    "passed": 16,
+    "failed": 4,
+    "defects": 4
+  },
+  "cases": [
+    {
+      "case_id": "API-001",
+      "title": "GET /pet/findByStatus?status=available 正向查询可用宠物",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 [{'id': 4, 'category': {'id': 1, 'name': 'Dogs'}, 'name': 'Dog 1', 'photoUrls': ['url1', 'url2'], 'tags': [{'id': 1, 'name': 'tag1'}, {'id': 2, 'name': 'tag2'}], 'status': 'available'}, {'id': 7, 'cat",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /pet/findByStatus -> 200，响应体: [{'id': 4, 'category': {'id': 1, 'name': 'Dogs'}, 'name': 'Dog 1', 'photoUrls': ['url1', 'url2'], 'tags': [{'id': 1, 'name': 'tag1'}, {'id': 2, 'name': 'tag2'}], 'status': 'available'}, {'id': 7, 'category': {'id': 4, 'name': 'Lions'}, 'name': 'Lion 1', 'photoUrls': ['url1', 'url2'], 'tags': [{'id':",
+      "duration_ms": 1297,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 1296ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-002",
+      "title": "GET /pet/findByStatus 缺少必填 query status 应返回 400",
+      "kind": "api",
+      "ok": true,
+      "expected": "400",
+      "actual": "400 {'code': 400, 'message': 'Input error: missing required query parameter `status`'}",
+      "actual_status": 400,
+      "error": "",
+      "evidence": "请求 GET /pet/findByStatus -> 400，响应体: {'code': 400, 'message': 'Input error: missing required query parameter `status`'}",
+      "duration_ms": 1016,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 1015ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-003",
+      "title": "GET /pet/findByStatus?status=notastatus 非法枚举值应返回 400",
+      "kind": "api",
+      "ok": true,
+      "expected": "400",
+      "actual": "400 {'code': 400, 'message': 'Input error: query parameter `status value `notastatus` is not in the allowable values `[available, pending, sold]`'}",
+      "actual_status": 400,
+      "error": "",
+      "evidence": "请求 GET /pet/findByStatus -> 400，响应体: {'code': 400, 'message': 'Input error: query parameter `status value `notastatus` is not in the allowable values `[available, pending, sold]`'}",
+      "duration_ms": 968,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 967ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-004",
+      "title": "GET /pet/findByTags?tags=tag1 按标签查询",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 [{'id': 4, 'category': {'id': 1, 'name': 'Dogs'}, 'name': 'Dog 1', 'photoUrls': ['url1', 'url2'], 'tags': [{'id': 1, 'name': 'tag1'}, {'id': 2, 'name': 'tag2'}], 'status': 'available'}, {'id': 7, 'cat",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /pet/findByTags -> 200，响应体: [{'id': 4, 'category': {'id': 1, 'name': 'Dogs'}, 'name': 'Dog 1', 'photoUrls': ['url1', 'url2'], 'tags': [{'id': 1, 'name': 'tag1'}, {'id': 2, 'name': 'tag2'}], 'status': 'available'}, {'id': 7, 'category': {'id': 4, 'name': 'Lions'}, 'name': 'Lion 1', 'photoUrls': ['url1', 'url2'], 'tags': [{'id':",
+      "duration_ms": 958,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 957ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-005",
+      "title": "GET /pet/findByTags 缺少必填 query tags 应返回 400",
+      "kind": "api",
+      "ok": true,
+      "expected": "400",
+      "actual": "400 {'code': 400, 'message': 'Input error: missing required query parameter `tags`'}",
+      "actual_status": 400,
+      "error": "",
+      "evidence": "请求 GET /pet/findByTags -> 400，响应体: {'code': 400, 'message': 'Input error: missing required query parameter `tags`'}",
+      "duration_ms": 985,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 984ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-006",
+      "title": "GET /pet/1 查询存在的宠物详情",
+      "kind": "api",
+      "ok": false,
+      "expected": "200",
+      "actual": "404 Pet not found",
+      "actual_status": 404,
+      "error": "期望状态码 200，实际 404",
+      "evidence": "请求 GET /pet/1 -> 404，响应体: Pet not found",
+      "duration_ms": 1022,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 1017ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-007",
+      "title": "GET /pet/999999999 不存在的 petId 应返回 404",
+      "kind": "api",
+      "ok": true,
+      "expected": "404",
+      "actual": "404 Pet not found",
+      "actual_status": 404,
+      "error": "",
+      "evidence": "请求 GET /pet/999999999 -> 404，响应体: Pet not found",
+      "duration_ms": 994,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 993ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-008",
+      "title": "GET /pet/abc 非数字 petId 契约声明 400（int64 类型校验）",
+      "kind": "api",
+      "ok": true,
+      "expected": "400",
+      "actual": "400 {'code': 400, 'message': \"Input error: couldn't convert `abc` to type `class java.lang.Long`\"}",
+      "actual_status": 400,
+      "error": "",
+      "evidence": "请求 GET /pet/abc -> 400，响应体: {'code': 400, 'message': \"Input error: couldn't convert `abc` to type `class java.lang.Long`\"}",
+      "duration_ms": 987,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 986ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-009",
+      "title": "POST /pet 创建宠物（自建资源，供后续读/删使用）",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'id': 987654321, 'category': {'id': 1, 'name': 'auto'}, 'name': 'auto-test-pet', 'photoUrls': ['https://example.com/p.png'], 'tags': [{'id': 1, 'name': 'tag1'}], 'status': 'available'}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 POST /pet -> 200，响应体: {'id': 987654321, 'category': {'id': 1, 'name': 'auto'}, 'name': 'auto-test-pet', 'photoUrls': ['https://example.com/p.png'], 'tags': [{'id': 1, 'name': 'tag1'}], 'status': 'available'}",
+      "duration_ms": 966,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 965ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-010",
+      "title": "POST /pet 缺少必填 name/photoUrls 应返回 400 或 422",
+      "kind": "api",
+      "ok": false,
+      "expected": "400",
+      "actual": "200 {'id': 987654322, 'photoUrls': [], 'tags': [], 'status': 'available'}",
+      "actual_status": 200,
+      "error": "期望状态码 400，实际 200",
+      "evidence": "请求 POST /pet -> 200，响应体: {'id': 987654322, 'photoUrls': [], 'tags': [], 'status': 'available'}",
+      "duration_ms": 967,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 966ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-011",
+      "title": "POST /pet 非法 status 枚举值应被拒绝（400/422）",
+      "kind": "api",
+      "ok": false,
+      "expected": "400",
+      "actual": "200 {'id': 987654323, 'name': 'bad-status-pet', 'photoUrls': ['https://example.com/p.png'], 'tags': [], 'status': 'notastatus'}",
+      "actual_status": 200,
+      "error": "期望状态码 400，实际 200",
+      "evidence": "请求 POST /pet -> 200，响应体: {'id': 987654323, 'name': 'bad-status-pet', 'photoUrls': ['https://example.com/p.png'], 'tags': [], 'status': 'notastatus'}",
+      "duration_ms": 967,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 966ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-012",
+      "title": "PUT /pet 更新自建宠物名称",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'id': 987654321, 'name': 'auto-test-pet-updated', 'photoUrls': ['https://example.com/p.png'], 'tags': [], 'status': 'sold'}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 PUT /pet -> 200，响应体: {'id': 987654321, 'name': 'auto-test-pet-updated', 'photoUrls': ['https://example.com/p.png'], 'tags': [], 'status': 'sold'}",
+      "duration_ms": 954,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 953ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-013",
+      "title": "PUT /pet 更新不存在的 petId 应返回 404",
+      "kind": "api",
+      "ok": true,
+      "expected": "404",
+      "actual": "404 Pet not found",
+      "actual_status": 404,
+      "error": "",
+      "evidence": "请求 PUT /pet -> 404，响应体: Pet not found",
+      "duration_ms": 965,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 964ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-014",
+      "title": "POST /pet/987654321 表单更新宠物 name/status",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'id': 987654321, 'name': 'form-updated', 'photoUrls': ['https://example.com/p.png'], 'tags': [], 'status': 'pending'}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 POST /pet/987654321 -> 200，响应体: {'id': 987654321, 'name': 'form-updated', 'photoUrls': ['https://example.com/p.png'], 'tags': [], 'status': 'pending'}",
+      "duration_ms": 951,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 950ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-015",
+      "title": "DELETE /pet/987654321 删除自建宠物（清理，不使用契约示例固定 id）",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 Pet deleted",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 DELETE /pet/987654321 -> 200，响应体: Pet deleted",
+      "duration_ms": 1277,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 1276ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-016",
+      "title": "GET /store/inventory 返回按状态分组的库存",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'approved': 57, 'placed': 100, 'delivered': 50}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /store/inventory -> 200，响应体: {'approved': 57, 'placed': 100, 'delivered': 50}",
+      "duration_ms": 981,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 980ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-017",
+      "title": "GET /store/order/1 查询订单（只读，不删除固定 id）",
+      "kind": "api",
+      "ok": true,
+      "expected": "200",
+      "actual": "200 {'id': 1, 'petId': 1, 'quantity': 100, 'shipDate': '2026-10-25T03:02:26.922+00:00', 'status': 'placed', 'complete': True}",
+      "actual_status": 200,
+      "error": "",
+      "evidence": "请求 GET /store/order/1 -> 200，响应体: {'id': 1, 'petId': 1, 'quantity': 100, 'shipDate': '2026-10-25T03:02:26.922+00:00', 'status': 'placed', 'complete': True}",
+      "duration_ms": 991,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 989ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-018",
+      "title": "GET /store/order/999999999 不存在订单应返回 404",
+      "kind": "api",
+      "ok": true,
+      "expected": "404",
+      "actual": "404 Order not found",
+      "actual_status": 404,
+      "error": "",
+      "evidence": "请求 GET /store/order/999999999 -> 404，响应体: Order not found",
+      "duration_ms": 989,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 988ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-019",
+      "title": "GET /user/login 缺少 username/password 应返回 400",
+      "kind": "api",
+      "ok": false,
+      "expected": "400",
+      "actual": "200 Logged in user session: 7180693170507649666",
+      "actual_status": 200,
+      "error": "期望状态码 400，实际 200",
+      "evidence": "请求 GET /user/login -> 200，响应体: Logged in user session: 7180693170507649666",
+      "duration_ms": 995,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 994ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    },
+    {
+      "case_id": "API-020",
+      "title": "GET /user/unknown_user_xyz 不存在用户应返回 404",
+      "kind": "api",
+      "ok": true,
+      "expected": "404",
+      "actual": "404 User not found",
+      "actual_status": 404,
+      "error": "",
+      "evidence": "请求 GET /user/unknown_user_xyz -> 404，响应体: User not found",
+      "duration_ms": 947,
+      "attempts": 1,
+      "retried": false,
+      "notes": [
+        "耗时 945ms"
+      ],
+      "metrics": {},
+      "invalid_case": false
+    }
+  ],
+  "defects": [
+    {
+      "id": "DEF-001",
+      "title": "POST /pet 未做必填字段校验，缺少 name/photoUrls 仍创建成功并返回 200",
+      "severity": "high",
+      "category": "contract",
+      "endpoint": "POST /pet",
+      "evidence": "期望 400/422，实际 200，响应体 {'id': 987654322, 'photoUrls': [], 'tags': [], 'status': 'available'}，name 缺失仍落库",
+      "suggestion": "在请求模型上为 name、photoUrls 增加必填约束（如 @NotBlank / @NotEmpty 或 OpenAPI required），校验失败统一返回 400 并给出字段级错误信息；同时补充契约测试覆盖缺失字段场景。",
+      "related_case_ids": [
+        "API-010"
+      ]
+    },
+    {
+      "id": "DEF-002",
+      "title": "POST /pet 未校验 status 枚举取值，非法值 notastatus 被接受并持久化",
+      "severity": "high",
+      "category": "contract",
+      "endpoint": "POST /pet",
+      "evidence": "期望 400/422，实际 200，响应体 status='notastatus' 原样返回并保存",
+      "suggestion": "将 status 定义为枚举（available/pending/sold）并在反序列化或业务层做白名单校验，非法值返回 400；数据库层可加 CHECK 约束兜底。",
+      "related_case_ids": [
+        "API-011"
+      ]
+    },
+    {
+      "id": "DEF-003",
+      "title": "GET /user/login 缺少 username/password 时未返回 400，反而创建了登录会话",
+      "severity": "high",
+      "category": "contract",
+      "endpoint": "GET /user/login",
+      "evidence": "期望 400，实际 200，响应体 'Logged in user session: 7180693170507649666'，空凭据即建立会话",
+      "suggestion": "对 username/password 增加必填校验，缺失时返回 400；同时排查空凭据是否可绕过认证（存在安全隐患），建议改为 POST + 认证失败返回 401。",
+      "related_case_ids": [
+        "API-019"
+      ]
+    },
+    {
+      "id": "DEF-004",
+      "title": "GET /pet/1 查询已存在宠物返回 404，疑似测试数据未预置或被并发用例清理",
+      "severity": "medium",
+      "category": "test_issue",
+      "endpoint": "GET /pet/{petId}",
+      "evidence": "期望 200，实际 404 'Pet not found'；该用例依赖固定 id=1 的数据，而其他用例（API-010/011）会创建新宠物，说明数据非自建",
+      "suggestion": "用例改为先通过 POST /pet 创建宠物并取其返回 id 再查询（自建自清理），或在 setup 中显式预置 id=1 数据；若确认服务端对已存在数据也返回 404，则升级为 bug 并检查存储/查询逻辑。",
+      "related_case_ids": [
+        "API-006"
+      ]
+    }
+  ],
+  "coverage": {
+    "GET /pet/findByStatus": [
+      "API-001",
+      "API-002",
+      "API-003"
+    ],
+    "GET /pet/findByTags": [
+      "API-004",
+      "API-005"
+    ],
+    "GET /pet/1": [
+      "API-006"
+    ],
+    "GET /pet/999999999": [
+      "API-007"
+    ],
+    "GET /pet/abc": [
+      "API-008"
+    ],
+    "POST /pet": [
+      "API-009",
+      "API-010",
+      "API-011"
+    ],
+    "PUT /pet": [
+      "API-012",
+      "API-013"
+    ],
+    "POST /pet/987654321": [
+      "API-014"
+    ],
+    "DELETE /pet/987654321": [
+      "API-015"
+    ],
+    "GET /store/inventory": [
+      "API-016"
+    ],
+    "GET /store/order/1": [
+      "API-017"
+    ],
+    "GET /store/order/999999999": [
+      "API-018"
+    ],
+    "GET /user/login": [
+      "API-019"
+    ],
+    "GET /user/unknown_user_xyz": [
+      "API-020"
+    ]
+  },
+  "trace": [
+    "[planner] llm 生成 20 条测试用例（--no-ui 过滤后 20 条）",
+    "[executor] PASS API-001 GET /pet/findByStatus?status=available 正向查询可用宠物 (期望 200 / 实际 200 [{'id': 4, 'category': {'id': 1, 'name': 'Dogs'}, 'name': 'Dog 1', 'photoUrls': ['url1', 'url2'], 'tags': [{'id': 1, 'name': 'tag1'}, {'id': 2, 'name': 'tag2'}], 'status': 'available'}, {'id': 7, 'cat / 1297ms)",
+    "[executor] PASS API-002 GET /pet/findByStatus 缺少必填 query status 应返回 400 (期望 400 / 实际 400 {'code': 400, 'message': 'Input error: missing required query parameter `status`'} / 1016ms)",
+    "[executor] PASS API-003 GET /pet/findByStatus?status=notastatus 非法枚举值应返回 400 (期望 400 / 实际 400 {'code': 400, 'message': 'Input error: query parameter `status value `notastatus` is not in the allowable values `[available, pending, sold]`'} / 968ms)",
+    "[executor] PASS API-004 GET /pet/findByTags?tags=tag1 按标签查询 (期望 200 / 实际 200 [{'id': 4, 'category': {'id': 1, 'name': 'Dogs'}, 'name': 'Dog 1', 'photoUrls': ['url1', 'url2'], 'tags': [{'id': 1, 'name': 'tag1'}, {'id': 2, 'name': 'tag2'}], 'status': 'available'}, {'id': 7, 'cat / 958ms)",
+    "[executor] PASS API-005 GET /pet/findByTags 缺少必填 query tags 应返回 400 (期望 400 / 实际 400 {'code': 400, 'message': 'Input error: missing required query parameter `tags`'} / 985ms)",
+    "[executor] FAIL API-006 GET /pet/1 查询存在的宠物详情 (期望 200 / 实际 404 Pet not found / 1022ms)",
+    "[executor] PASS API-007 GET /pet/999999999 不存在的 petId 应返回 404 (期望 404 / 实际 404 Pet not found / 994ms)",
+    "[executor] PASS API-008 GET /pet/abc 非数字 petId 契约声明 400（int64 类型校验） (期望 400 / 实际 400 {'code': 400, 'message': \"Input error: couldn't convert `abc` to type `class java.lang.Long`\"} / 987ms)",
+    "[executor] PASS API-009 POST /pet 创建宠物（自建资源，供后续读/删使用） (期望 200 / 实际 200 {'id': 987654321, 'category': {'id': 1, 'name': 'auto'}, 'name': 'auto-test-pet', 'photoUrls': ['https://example.com/p.png'], 'tags': [{'id': 1, 'name': 'tag1'}], 'status': 'available'} / 966ms)",
+    "[executor] FAIL API-010 POST /pet 缺少必填 name/photoUrls 应返回 400 或 422 (期望 400 / 实际 200 {'id': 987654322, 'photoUrls': [], 'tags': [], 'status': 'available'} / 967ms)",
+    "[executor] FAIL API-011 POST /pet 非法 status 枚举值应被拒绝（400/422） (期望 400 / 实际 200 {'id': 987654323, 'name': 'bad-status-pet', 'photoUrls': ['https://example.com/p.png'], 'tags': [], 'status': 'notastatus'} / 967ms)",
+    "[executor] PASS API-012 PUT /pet 更新自建宠物名称 (期望 200 / 实际 200 {'id': 987654321, 'name': 'auto-test-pet-updated', 'photoUrls': ['https://example.com/p.png'], 'tags': [], 'status': 'sold'} / 954ms)",
+    "[executor] PASS API-013 PUT /pet 更新不存在的 petId 应返回 404 (期望 404 / 实际 404 Pet not found / 965ms)",
+    "[executor] PASS API-014 POST /pet/987654321 表单更新宠物 name/status (期望 200 / 实际 200 {'id': 987654321, 'name': 'form-updated', 'photoUrls': ['https://example.com/p.png'], 'tags': [], 'status': 'pending'} / 951ms)",
+    "[executor] PASS API-015 DELETE /pet/987654321 删除自建宠物（清理，不使用契约示例固定 id） (期望 200 / 实际 200 Pet deleted / 1277ms)",
+    "[executor] PASS API-016 GET /store/inventory 返回按状态分组的库存 (期望 200 / 实际 200 {'approved': 57, 'placed': 100, 'delivered': 50} / 981ms)",
+    "[executor] PASS API-017 GET /store/order/1 查询订单（只读，不删除固定 id） (期望 200 / 实际 200 {'id': 1, 'petId': 1, 'quantity': 100, 'shipDate': '2026-10-25T03:02:26.922+00:00', 'status': 'placed', 'complete': True} / 991ms)",
+    "[executor] PASS API-018 GET /store/order/999999999 不存在订单应返回 404 (期望 404 / 实际 404 Order not found / 989ms)",
+    "[executor] FAIL API-019 GET /user/login 缺少 username/password 应返回 400 (期望 400 / 实际 200 Logged in user session: 7180693170507649666 / 995ms)",
+    "[executor] PASS API-020 GET /user/unknown_user_xyz 不存在用户应返回 404 (期望 404 / 实际 404 User not found / 947ms)",
+    "[critic] 失败 4/20，归因出 4 个缺陷",
+    "[critic]   DEF-001 [high/contract] POST /pet 未做必填字段校验，缺少 name/photoUrls 仍创建成功并返回 200 @ POST /pet",
+    "[critic]   DEF-002 [high/contract] POST /pet 未校验 status 枚举取值，非法值 notastatus 被接受并持久化 @ POST /pet",
+    "[critic]   DEF-003 [high/contract] GET /user/login 缺少 username/password 时未返回 400，反而创建了登录会话 @ GET /user/login",
+    "[critic]   DEF-004 [medium/test_issue] GET /pet/1 查询已存在宠物返回 404，疑似测试数据未预置或被并发用例清理 @ GET /pet/{petId}"
+  ],
+  "report_files": {}
+}

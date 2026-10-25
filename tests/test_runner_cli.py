@@ -334,6 +334,7 @@ class TestBuildContext:
         ctx = runner.build_context(cfg, skip_ui=False)
         assert set(ctx) == {
             "base_url",
+            "base_url_proxy",
             "report_dir",
             "ui_backend",
             "chrome_path",

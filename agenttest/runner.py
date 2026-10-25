@@ -16,6 +16,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import requests
 from werkzeug.serving import make_server
@@ -114,9 +115,26 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
+
+
+def is_local_target(url: str) -> bool:
+    """被测系统是不是"本机"。
+
+    这个判断决定两件事：①要不要在进程内起一个被测服务；②健康检查有没有意义。
+    远端目标（例如 Petstore 这种第三方契约）两者都不成立 —— 它没有 `/api/health`，
+    也绝不该由我们来起。把两种目标硬塞进同一条流程，结果会是
+    "远端目标被当成起不来的本机服务，于是原地起了一个本地 demo，测的还是自己"，
+    这是最糟的一种假执行：流程跑通、报告很绿、被测对象却不是你以为的那个。
+    """
+    parsed = urlparse(url if "//" in url else f"http://{url}")
+    return (parsed.hostname or "") in LOCAL_HOSTS
+
+
 def build_context(cfg: Config, skip_ui: bool) -> Dict[str, Any]:
     return {
         "base_url": cfg.demo_url,
+        "base_url_proxy": cfg.demo_proxy,
         "report_dir": cfg.report_dir,
         "ui_backend": cfg.effective_ui_backend,
         "chrome_path": cfg.chrome_path,
@@ -152,7 +170,10 @@ def main(argv: Optional[list] = None) -> int:
     print("=" * 64)
 
     server: Optional[DemoServer] = None
-    if not wait_for_health(cfg.demo_url, timeout=3):
+    if not is_local_target(cfg.demo_url):
+        # 远端目标：没有 /api/health，也不该由我们起服。能不能用由"契约读得到"来判。
+        print(f"[runner] 远端被测系统: {cfg.demo_url}（跳过健康检查与本地起服）")
+    elif not wait_for_health(cfg.demo_url, timeout=3):
         print(f"[runner] 被测系统未启动，正在本进程内启动: {cfg.demo_url}")
         server = DemoServer(cfg.demo_url)
         server.start()
@@ -163,7 +184,7 @@ def main(argv: Optional[list] = None) -> int:
         print(f"[runner] 复用已运行被测系统: {cfg.demo_url}")
 
     try:
-        spec = fetch_openapi(cfg.demo_url)
+        spec = fetch_openapi(cfg.demo_url, proxy=cfg.demo_proxy)
         print(
             f"[runner] 已获取契约: {spec.get('info', {}).get('title', 'OpenAPI')} "
             f"v{spec.get('info', {}).get('version', '?')}，"

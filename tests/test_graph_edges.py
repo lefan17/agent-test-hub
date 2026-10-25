@@ -192,7 +192,7 @@ def test_retry_recovers_when_second_round_passes(tmp_path, monkeypatch):
 
     rounds = {"n": 0}
 
-    def fake_api(case, base_url):
+    def fake_api(case, base_url, proxy=""):
         # 只让「登录接口」在第二轮变绿，其余照旧失败：
         # 既验证救援，又保证仍有其它可重试失败，不会因救援而跳过回边逻辑。
         if case.id == "API-002":

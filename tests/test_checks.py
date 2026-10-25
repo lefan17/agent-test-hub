@@ -317,7 +317,7 @@ def test_retry_backoff_is_exponential(monkeypatch):
     monkeypatch.setattr(
         nodes,
         "_run_api_case",
-        lambda case, base_url: {
+        lambda case, base_url, proxy="": {
             "ok": False,
             "status": 503,
             "actual": "503",
@@ -344,7 +344,7 @@ def test_single_attempt_never_sleeps(monkeypatch):
     monkeypatch.setattr(
         nodes,
         "_run_api_case",
-        lambda case, base_url: {
+        lambda case, base_url, proxy="": {
             "ok": False,
             "status": 400,
             "actual": "400",

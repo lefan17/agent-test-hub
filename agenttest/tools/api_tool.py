@@ -39,16 +39,24 @@ def api_request(
     headers: Optional[Dict[str, str]] = None,
     base_url: str = "http://127.0.0.1:5001",
     timeout: float = 10.0,
+    proxy: str = "",
 ) -> Dict[str, Any]:
     """执行一次接口调用。
 
     返回: {ok, status, body, time_ms, error}
     ok 仅表示调用本身成功（有 HTTP 响应），业务断言由测试用例负责。
+
+    `proxy` 是**显式**的，不读环境变量：被测系统在公网时（例如拿 Petstore
+    这种第三方契约做验证）才需要它，而默认的 `trust_env=False` 必须保持 ——
+    否则本机被测服务会被 `HTTP_PROXY` 劫持成代理的 502，理由见
+    `_direct_session`。两者要同时成立，只能把代理做成参数。
     """
     url = path if path.startswith("http") else f"{base_url.rstrip('/')}{path}"
     start = time.perf_counter()
     try:
         with _direct_session() as session:
+            if proxy:
+                session.proxies = {"http": proxy, "https": proxy}
             resp = session.request(
                 method=method.upper(),
                 url=url,

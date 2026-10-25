@@ -7,16 +7,30 @@ from typing import Any, Dict, List
 import requests
 
 
-def fetch_openapi(base_url: str = "http://127.0.0.1:5001", timeout: float = 10.0) -> Dict[str, Any]:
-    """GET {base_url}/openapi.json，返回规范字典。
+def fetch_openapi(
+    base_url: str = "http://127.0.0.1:5001",
+    timeout: float = 10.0,
+    spec_url: str = "",
+    proxy: str = "",
+) -> Dict[str, Any]:
+    """读取 OpenAPI 规范，返回规范字典。
+
+    默认 GET `{base_url}/openapi.json`。被测系统不在本机时用两个额外参数：
+
+    - `spec_url`：契约地址与业务地址不同源时显式给（Petstore 的契约在
+      `/api/v3/openapi.json`，业务也在同一前缀下，但别的服务未必如此）；
+    - `proxy`：**显式**代理，不读环境变量。
 
     `trust_env = False` 的理由与 `api_tool._direct_session` 相同：读契约打的是
     本机被测服务，经代理绕一圈拿回来的可能是代理的错误页，而 `raise_for_status()`
     会把它当成「被测服务挂了」。
     """
+    url = spec_url or f"{base_url.rstrip('/')}/openapi.json"
     with requests.Session() as session:
         session.trust_env = False
-        resp = session.get(f"{base_url.rstrip('/')}/openapi.json", timeout=timeout)
+        if proxy:
+            session.proxies = {"http": proxy, "https": proxy}
+        resp = session.get(url, timeout=timeout)
     resp.raise_for_status()
     return resp.json()
 

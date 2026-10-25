@@ -79,6 +79,11 @@ def load_profile(env_name: str) -> Dict[str, str]:
 @dataclass
 class Config:
     demo_url: str = "http://127.0.0.1:5001"
+    # 被测系统的显式代理。与 `llm_http_proxy` 分开：前者是"被测系统在哪"，
+    # 后者是"模型 API 怎么走"，两个方向完全可能不同（本机：被测服务直连、
+    # 公网 Petstore 要过代理、模型 API 也要过代理 —— 但这是三个独立决定）。
+    # 默认空 = 直连，**刻意不继承 HTTP_PROXY**，理由见 api_tool._direct_session。
+    demo_proxy: str = ""
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_model: str = "deepseek-chat"
@@ -146,6 +151,7 @@ class Config:
 
         return cls(
             demo_url=pick("AGENTTEST_DEMO_URL", "http://127.0.0.1:5001"),
+            demo_proxy=pick("AGENTTEST_DEMO_PROXY"),
             llm_api_key=pick("AGENTTEST_LLM_API_KEY"),
             llm_base_url=pick("AGENTTEST_LLM_BASE_URL"),
             llm_model=pick("AGENTTEST_LLM_MODEL", "deepseek-chat"),

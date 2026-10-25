@@ -40,6 +40,7 @@
 | **工程外壳** | Agent 编排（可配置重试轮次与真实回边）· 三层断言 · 覆盖率双门槛 · mypy + ruff · docker compose · 依赖漏洞扫描 |
 | **怎么跑** | `pip install -e .` → 配 `AGENTTEST_LLM_API_KEY` → `python -m agenttest.cli run --base-url http://127.0.0.1:5001` |
 | **不配 key 能跑吗** | 能（MockBrain + 纯标准库 BM25），但报告会**显式标注降级原因**，不伪装成真实 LLM |
+| **对陌生契约能工作吗** | 能。[对第三方 Petstore 跑过](docs/第三方契约验证.md)：20 用例 / 16 通过 / 4 失败 / 4 缺陷，其中 3 条是对方真的没兑现契约、1 条被 agent 自己判成 `test_issue` |
 | **哪些是我自己写的** | 纯标准库 BM25（`demo_app/rag.py`）、检索质量评测口径（`agenttest/tools/rag_metrics.py`）、6 类检索缺陷注入 |
 
 > 这一节只回答「它是什么、真调没调 LLM、怎么跑」。设计取舍与踩坑记录在下面各节，
@@ -53,6 +54,29 @@
 ![执行轨迹：首行是 [planner] llm 生成 26 条测试用例，末行是 [critic] 失败 8/26，归因出 5 个缺陷](docs/images/report-trace.png)
 
 </details>
+
+## 对第三方契约跑一遍（「不只是自测自建」的证据）
+
+上面那份报告的被测系统是我自己写的（`demo_app/`，连缺陷都是我注入的）。所以补了一个
+入口 `scripts/run_remote.py`：同一套 LangGraph 流程，target 换成公网上的第三方服务
+（Swagger 官方 Petstore v3），契约从对方 `/openapi.json` 现取，用例由 LLM 现场生成。
+
+2026-10-25 的一次真实运行（36 秒，`brain_name = llm`）：**20 条用例 / 16 通过 / 4 失败 /
+归因出 4 个缺陷**。三条是对方真的没兑现契约 ——
+
+| 缺陷 | 现象 |
+|---|---|
+| `DEF-001` high/contract | `POST /pet` 不带 `name` / `photoUrls`（契约标为 required）仍 200 并落库 |
+| `DEF-002` high/contract | `POST /pet` 的 `status` 传非法枚举值 `notastatus` 被接受并持久化 |
+| `DEF-003` high/contract | `GET /user/login` 不带凭据返回 200，还**建立了会话** |
+
+第四条（`GET /pet/1` 期望 200 实际 404）被 critic 自己判成 **`test_issue`** 而不是缺陷，
+理由是「该用例依赖固定 id=1 的数据，说明数据非自建」——把「我不知道那是你的测试数据」
+和「你的实现有问题」分开，比多报三条缺陷更能说明判断力。
+
+细节、三个工程坑（提示词花括号把 `.format()` 打崩、`sys.path`、远端目标被当成本机起
+本地 demo）与诚实边界都在 [`docs/第三方契约验证.md`](docs/第三方契约验证.md)；
+原始产物在 [`docs/evidence/petstore/`](docs/evidence/petstore/)。
 
 ## 为什么这个项目能同时投两个岗位
 

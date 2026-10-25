@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Agent 自动测试报告 - 对一个第三方 OpenAPI 服务（Swagger Petstore - OpenAPI 3.0）执行接口自动化测试：按契约生成用例、发现契约与实现的偏差并给出缺陷归因</title>
+<style>
+  :root { --ok:#16a34a; --fail:#dc2626; --warn:#d97706; --muted:#6b7280; --line:#e5e7eb; }
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; margin: 0; background:#f8fafc; color:#0f172a; }
+  header { background: linear-gradient(135deg,#0f172a,#1e3a8a); color:#fff; padding: 28px 40px; }
+  header h1 { margin: 0 0 8px; font-size: 22px; }
+  header .meta { opacity: .85; font-size: 13px; line-height: 1.8; }
+  main { padding: 24px 40px 60px; max-width: 1200px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin: 20px 0; }
+  .card { background:#fff; border:1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card .num { font-size: 30px; font-weight: 700; }
+  .card .label { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .ok { color: var(--ok); } .fail { color: var(--fail); } .warn { color: var(--warn); }
+  h2 { margin: 34px 0 12px; font-size: 18px; border-left: 4px solid #1e3a8a; padding-left: 10px; }
+  .defect { background:#fff; border:1px solid var(--line); border-left:4px solid var(--fail); border-radius:10px; padding: 14px 16px; margin-bottom: 12px; }
+  .defect.flaky { border-left-color: var(--warn); }
+  .defect.relevance { border-left-color: #0891b2; }
+  .defect h3 { margin: 0 0 6px; font-size: 15px; }
+  .defect .tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; margin-right:8px; background:#fee2e2; color:#991b1b; }
+  .defect.flaky .tag { background:#fef3c7; color:#92400e; }
+  .defect.relevance .tag { background:#cffafe; color:#155e75; }
+  .defect p { margin: 4px 0; font-size: 13px; color:#334155; }
+  table { width:100%; border-collapse: collapse; background:#fff; border:1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { background:#f1f5f9; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+  .badge.pass { background:#dcfce7; color:#166534; } .badge.fail { background:#fee2e2; color:#991b1b; }
+  .badge.api { background:#e0f2fe; color:#075985; } .badge.ui { background:#ede9fe; color:#5b21b6; }
+  .badge.rag { background:#dcfce7; color:#166534; }
+  .trace { background:#0f172a; color:#d1d5db; border-radius: 10px; padding: 16px 18px; font-family: Consolas, monospace; font-size: 12px; line-height: 1.9; overflow-x: auto; }
+  .trace .t-pass { color:#4ade80; } .trace .t-fail { color:#f87171; }
+  img.shot { max-width: 420px; border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .fallback-warning { background:#78350f; color:#fde68a; border:1px solid #b45309; border-radius:8px; padding:10px 14px; margin:0 0 16px; font-size:13px; line-height:1.7; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 Agent 自动测试报告</h1>
+  <div class="meta">
+    目标：对一个第三方 OpenAPI 服务（Swagger Petstore - OpenAPI 3.0）执行接口自动化测试：按契约生成用例、发现契约与实现的偏差并给出缺陷归因<br>
+    Brain：llm（真实 LLM）
+    ｜ 被测系统：https://petstore3.swagger.io/api/v3
+    ｜ 开始 2026-10-25 12:16:00 ～ 结束 2026-10-25 12:16:36
+  </div>
+  
+</header>
+<main>
+  <div class="cards">
+    <div class="card"><div class="num">20</div><div class="label">用例总数</div></div>
+    <div class="card"><div class="num ok">16</div><div class="label">通过</div></div>
+    <div class="card"><div class="num fail">4</div><div class="label">失败</div></div>
+    <div class="card"><div class="num fail">4</div><div class="label">发现缺陷</div></div>
+  </div>
+
+  
+  <h2>🐞 发现的缺陷（Agent 归因）</h2>
+  
+  <div class="defect ">
+    <h3>DEF-001 POST /pet 未做必填字段校验，缺少 name/photoUrls 仍创建成功并返回 200
+      <span class="tag">high / contract</span>
+    </h3>
+    <p><b>端点：</b>POST /pet</p>
+    <p><b>证据：</b>期望 400/422，实际 200，响应体 {&#39;id&#39;: 987654322, &#39;photoUrls&#39;: [], &#39;tags&#39;: [], &#39;status&#39;: &#39;available&#39;}，name 缺失仍落库</p>
+    <p><b>建议：</b>在请求模型上为 name、photoUrls 增加必填约束（如 @NotBlank / @NotEmpty 或 OpenAPI required），校验失败统一返回 400 并给出字段级错误信息；同时补充契约测试覆盖缺失字段场景。</p>
+    <p class="muted">关联用例：API-010</p>
+  </div>
+  
+  <div class="defect ">
+    <h3>DEF-002 POST /pet 未校验 status 枚举取值，非法值 notastatus 被接受并持久化
+      <span class="tag">high / contract</span>
+    </h3>
+    <p><b>端点：</b>POST /pet</p>
+    <p><b>证据：</b>期望 400/422，实际 200，响应体 status=&#39;notastatus&#39; 原样返回并保存</p>
+    <p><b>建议：</b>将 status 定义为枚举（available/pending/sold）并在反序列化或业务层做白名单校验，非法值返回 400；数据库层可加 CHECK 约束兜底。</p>
+    <p class="muted">关联用例：API-011</p>
+  </div>
+  
+  <div class="defect ">
+    <h3>DEF-003 GET /user/login 缺少 username/password 时未返回 400，反而创建了登录会话
+      <span class="tag">high / contract</span>
+    </h3>
+    <p><b>端点：</b>GET /user/login</p>
+    <p><b>证据：</b>期望 400，实际 200，响应体 &#39;Logged in user session: 7180693170507649666&#39;，空凭据即建立会话</p>
+    <p><b>建议：</b>对 username/password 增加必填校验，缺失时返回 400；同时排查空凭据是否可绕过认证（存在安全隐患），建议改为 POST + 认证失败返回 401。</p>
+    <p class="muted">关联用例：API-019</p>
+  </div>
+  
+  <div class="defect ">
+    <h3>DEF-004 GET /pet/1 查询已存在宠物返回 404，疑似测试数据未预置或被并发用例清理
+      <span class="tag">medium / test_issue</span>
+    </h3>
+    <p><b>端点：</b>GET /pet/{petId}</p>
+    <p><b>证据：</b>期望 200，实际 404 &#39;Pet not found&#39;；该用例依赖固定 id=1 的数据，而其他用例（API-010/011）会创建新宠物，说明数据非自建</p>
+    <p><b>建议：</b>用例改为先通过 POST /pet 创建宠物并取其返回 id 再查询（自建自清理），或在 setup 中显式预置 id=1 数据；若确认服务端对已存在数据也返回 404，则升级为 bug 并检查存储/查询逻辑。</p>
+    <p class="muted">关联用例：API-006</p>
+  </div>
+  
+  
+
+  <h2>📋 用例执行明细</h2>
+  <table>
+    <tr><th>ID</th><th>标题</th><th>类型</th><th>期望</th><th>实际</th><th>结果</th><th>耗时</th><th>备注</th></tr>
+    
+    <tr>
+      <td>API-001</td>
+      <td>GET /pet/findByStatus?status=available 正向查询可用宠物</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 [{&#39;id&#39;: 4, &#39;category&#39;: {&#39;id&#39;: 1, &#39;name&#39;: &#39;Dogs&#39;}, &#39;name&#39;: &#39;Dog 1&#39;, &#39;photoUrls&#39;: [&#39;url1&#39;, &#39;url2&#39;], &#39;tags&#39;: [{&#39;id&#39;: 1,</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>1297ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /pet/findByStatus -&gt; 200，响应体: [{&#39;id&#39;: 4, &#39;category&#39;: {&#39;id&#39;: 1, &#39;name&#39;: &#39;Dogs&#39;}, &#39;name&#39;: &#39;Dog 1&#39;, &#39;photoUrls&#39;: [&#39;url1&#39;, &#39;url2&#39;], &#39;tags&#39;: [{&#39;id&#39;: 1, &#39;name&#39;: &#39;tag1&#39;}, {&#39;id&#39;: 2, &#39;name&#39;: &#39;tag2&#39;}], &#39;</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-002</td>
+      <td>GET /pet/findByStatus 缺少必填 query status 应返回 400</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>400 {&#39;code&#39;: 400, &#39;message&#39;: &#39;Input error: missing required query parameter `status`&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>1016ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /pet/findByStatus -&gt; 400，响应体: {&#39;code&#39;: 400, &#39;message&#39;: &#39;Input error: missing required query parameter `status`&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-003</td>
+      <td>GET /pet/findByStatus?status=notastatus 非法枚举值应返回 400</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>400 {&#39;code&#39;: 400, &#39;message&#39;: &#39;Input error: query parameter `status value `notastatus` is not in the allowable values `[a</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>968ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /pet/findByStatus -&gt; 400，响应体: {&#39;code&#39;: 400, &#39;message&#39;: &#39;Input error: query parameter `status value `notastatus` is not in the allowable values `[available, pending, sold]`&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-004</td>
+      <td>GET /pet/findByTags?tags=tag1 按标签查询</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 [{&#39;id&#39;: 4, &#39;category&#39;: {&#39;id&#39;: 1, &#39;name&#39;: &#39;Dogs&#39;}, &#39;name&#39;: &#39;Dog 1&#39;, &#39;photoUrls&#39;: [&#39;url1&#39;, &#39;url2&#39;], &#39;tags&#39;: [{&#39;id&#39;: 1,</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>958ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /pet/findByTags -&gt; 200，响应体: [{&#39;id&#39;: 4, &#39;category&#39;: {&#39;id&#39;: 1, &#39;name&#39;: &#39;Dogs&#39;}, &#39;name&#39;: &#39;Dog 1&#39;, &#39;photoUrls&#39;: [&#39;url1&#39;, &#39;url2&#39;], &#39;tags&#39;: [{&#39;id&#39;: 1, &#39;name&#39;: &#39;tag1&#39;}, {&#39;id&#39;: 2, &#39;name&#39;: &#39;tag2&#39;}], &#39;st</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-005</td>
+      <td>GET /pet/findByTags 缺少必填 query tags 应返回 400</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>400 {&#39;code&#39;: 400, &#39;message&#39;: &#39;Input error: missing required query parameter `tags`&#39;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>985ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /pet/findByTags -&gt; 400，响应体: {&#39;code&#39;: 400, &#39;message&#39;: &#39;Input error: missing required query parameter `tags`&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-006</td>
+      <td>GET /pet/1 查询存在的宠物详情</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>404 Pet not found</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>1022ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">期望状态码 200，实际 404</div>
+        
+        
+        <div class="muted">请求 GET /pet/1 -&gt; 404，响应体: Pet not found</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-007</td>
+      <td>GET /pet/999999999 不存在的 petId 应返回 404</td>
+      <td><span class="badge api">api</span></td>
+      <td>404</td>
+      <td>404 Pet not found</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>994ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /pet/999999999 -&gt; 404，响应体: Pet not found</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-008</td>
+      <td>GET /pet/abc 非数字 petId 契约声明 400（int64 类型校验）</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>400 {&#39;code&#39;: 400, &#39;message&#39;: &#34;Input error: couldn&#39;t convert `abc` to type `class java.lang.Long`&#34;}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>987ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /pet/abc -&gt; 400，响应体: {&#39;code&#39;: 400, &#39;message&#39;: &#34;Input error: couldn&#39;t convert `abc` to type `class java.lang.Long`&#34;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-009</td>
+      <td>POST /pet 创建宠物（自建资源，供后续读/删使用）</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;id&#39;: 987654321, &#39;category&#39;: {&#39;id&#39;: 1, &#39;name&#39;: &#39;auto&#39;}, &#39;name&#39;: &#39;auto-test-pet&#39;, &#39;photoUrls&#39;: [&#39;https://example.com</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>966ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 POST /pet -&gt; 200，响应体: {&#39;id&#39;: 987654321, &#39;category&#39;: {&#39;id&#39;: 1, &#39;name&#39;: &#39;auto&#39;}, &#39;name&#39;: &#39;auto-test-pet&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [{&#39;id&#39;: 1, &#39;name&#39;: &#39;tag1&#39;}], &#39;status&#39;: &#39;a</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-010</td>
+      <td>POST /pet 缺少必填 name/photoUrls 应返回 400 或 422</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>200 {&#39;id&#39;: 987654322, &#39;photoUrls&#39;: [], &#39;tags&#39;: [], &#39;status&#39;: &#39;available&#39;}</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>967ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">期望状态码 400，实际 200</div>
+        
+        
+        <div class="muted">请求 POST /pet -&gt; 200，响应体: {&#39;id&#39;: 987654322, &#39;photoUrls&#39;: [], &#39;tags&#39;: [], &#39;status&#39;: &#39;available&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-011</td>
+      <td>POST /pet 非法 status 枚举值应被拒绝（400/422）</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>200 {&#39;id&#39;: 987654323, &#39;name&#39;: &#39;bad-status-pet&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [], &#39;status&#39;: &#39;notas</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>967ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">期望状态码 400，实际 200</div>
+        
+        
+        <div class="muted">请求 POST /pet -&gt; 200，响应体: {&#39;id&#39;: 987654323, &#39;name&#39;: &#39;bad-status-pet&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [], &#39;status&#39;: &#39;notastatus&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-012</td>
+      <td>PUT /pet 更新自建宠物名称</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;id&#39;: 987654321, &#39;name&#39;: &#39;auto-test-pet-updated&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [], &#39;status&#39;:</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>954ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 PUT /pet -&gt; 200，响应体: {&#39;id&#39;: 987654321, &#39;name&#39;: &#39;auto-test-pet-updated&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [], &#39;status&#39;: &#39;sold&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-013</td>
+      <td>PUT /pet 更新不存在的 petId 应返回 404</td>
+      <td><span class="badge api">api</span></td>
+      <td>404</td>
+      <td>404 Pet not found</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>965ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 PUT /pet -&gt; 404，响应体: Pet not found</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-014</td>
+      <td>POST /pet/987654321 表单更新宠物 name/status</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;id&#39;: 987654321, &#39;name&#39;: &#39;form-updated&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [], &#39;status&#39;: &#39;pending</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>951ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 POST /pet/987654321 -&gt; 200，响应体: {&#39;id&#39;: 987654321, &#39;name&#39;: &#39;form-updated&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [], &#39;status&#39;: &#39;pending&#39;}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-015</td>
+      <td>DELETE /pet/987654321 删除自建宠物（清理，不使用契约示例固定 id）</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 Pet deleted</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>1277ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 DELETE /pet/987654321 -&gt; 200，响应体: Pet deleted</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-016</td>
+      <td>GET /store/inventory 返回按状态分组的库存</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;approved&#39;: 57, &#39;placed&#39;: 100, &#39;delivered&#39;: 50}</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>981ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /store/inventory -&gt; 200，响应体: {&#39;approved&#39;: 57, &#39;placed&#39;: 100, &#39;delivered&#39;: 50}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-017</td>
+      <td>GET /store/order/1 查询订单（只读，不删除固定 id）</td>
+      <td><span class="badge api">api</span></td>
+      <td>200</td>
+      <td>200 {&#39;id&#39;: 1, &#39;petId&#39;: 1, &#39;quantity&#39;: 100, &#39;shipDate&#39;: &#39;2026-10-25T03:02:26.922+00:00&#39;, &#39;status&#39;: &#39;placed&#39;, &#39;complete&#39;: </td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>991ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /store/order/1 -&gt; 200，响应体: {&#39;id&#39;: 1, &#39;petId&#39;: 1, &#39;quantity&#39;: 100, &#39;shipDate&#39;: &#39;2026-10-25T03:02:26.922+00:00&#39;, &#39;status&#39;: &#39;placed&#39;, &#39;complete&#39;: True}</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-018</td>
+      <td>GET /store/order/999999999 不存在订单应返回 404</td>
+      <td><span class="badge api">api</span></td>
+      <td>404</td>
+      <td>404 Order not found</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>989ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /store/order/999999999 -&gt; 404，响应体: Order not found</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-019</td>
+      <td>GET /user/login 缺少 username/password 应返回 400</td>
+      <td><span class="badge api">api</span></td>
+      <td>400</td>
+      <td>200 Logged in user session: 7180693170507649666</td>
+      <td><span class="badge fail">FAIL</span></td>
+      <td>995ms</td>
+      <td>
+        <div class="fail" style="font-size:12px">期望状态码 400，实际 200</div>
+        
+        
+        <div class="muted">请求 GET /user/login -&gt; 200，响应体: Logged in user session: 7180693170507649666</div>
+        
+      </td>
+    </tr>
+    
+    <tr>
+      <td>API-020</td>
+      <td>GET /user/unknown_user_xyz 不存在用户应返回 404</td>
+      <td><span class="badge api">api</span></td>
+      <td>404</td>
+      <td>404 User not found</td>
+      <td><span class="badge pass">PASS</span></td>
+      <td>947ms</td>
+      <td>
+        
+        
+        
+        <div class="muted">请求 GET /user/unknown_user_xyz -&gt; 404，响应体: User not found</div>
+        
+      </td>
+    </tr>
+    
+  </table>
+
+  <h2>🗺️ 覆盖率</h2>
+  <table>
+    <tr><th>端点 / 页面</th><th>覆盖用例</th></tr>
+    
+    <tr><td>GET /pet/findByStatus</td><td>API-001, API-002, API-003</td></tr>
+    
+    <tr><td>GET /pet/findByTags</td><td>API-004, API-005</td></tr>
+    
+    <tr><td>GET /pet/1</td><td>API-006</td></tr>
+    
+    <tr><td>GET /pet/999999999</td><td>API-007</td></tr>
+    
+    <tr><td>GET /pet/abc</td><td>API-008</td></tr>
+    
+    <tr><td>POST /pet</td><td>API-009, API-010, API-011</td></tr>
+    
+    <tr><td>PUT /pet</td><td>API-012, API-013</td></tr>
+    
+    <tr><td>POST /pet/987654321</td><td>API-014</td></tr>
+    
+    <tr><td>DELETE /pet/987654321</td><td>API-015</td></tr>
+    
+    <tr><td>GET /store/inventory</td><td>API-016</td></tr>
+    
+    <tr><td>GET /store/order/1</td><td>API-017</td></tr>
+    
+    <tr><td>GET /store/order/999999999</td><td>API-018</td></tr>
+    
+    <tr><td>GET /user/login</td><td>API-019</td></tr>
+    
+    <tr><td>GET /user/unknown_user_xyz</td><td>API-020</td></tr>
+    
+  </table>
+
+  <h2>🧠 Agent 思考轨迹（trace）</h2>
+  <div class="trace">
+    
+    <div>[planner] llm 生成 20 条测试用例（--no-ui 过滤后 20 条）</div>
+    
+    <div>[executor] PASS API-001 GET /pet/findByStatus?status=available 正向查询可用宠物 (期望 200 / 实际 200 [{&#39;id&#39;: 4, &#39;category&#39;: {&#39;id&#39;: 1, &#39;name&#39;: &#39;Dogs&#39;}, &#39;name&#39;: &#39;Dog 1&#39;, &#39;photoUrls&#39;: [&#39;url1&#39;, &#39;url2&#39;], &#39;tags&#39;: [{&#39;id&#39;: 1, &#39;name&#39;: &#39;tag1&#39;}, {&#39;id&#39;: 2, &#39;name&#39;: &#39;tag2&#39;}], &#39;status&#39;: &#39;available&#39;}, {&#39;id&#39;: 7, &#39;cat / 1297ms)</div>
+    
+    <div>[executor] PASS API-002 GET /pet/findByStatus 缺少必填 query status 应返回 400 (期望 400 / 实际 400 {&#39;code&#39;: 400, &#39;message&#39;: &#39;Input error: missing required query parameter `status`&#39;} / 1016ms)</div>
+    
+    <div>[executor] PASS API-003 GET /pet/findByStatus?status=notastatus 非法枚举值应返回 400 (期望 400 / 实际 400 {&#39;code&#39;: 400, &#39;message&#39;: &#39;Input error: query parameter `status value `notastatus` is not in the allowable values `[available, pending, sold]`&#39;} / 968ms)</div>
+    
+    <div>[executor] PASS API-004 GET /pet/findByTags?tags=tag1 按标签查询 (期望 200 / 实际 200 [{&#39;id&#39;: 4, &#39;category&#39;: {&#39;id&#39;: 1, &#39;name&#39;: &#39;Dogs&#39;}, &#39;name&#39;: &#39;Dog 1&#39;, &#39;photoUrls&#39;: [&#39;url1&#39;, &#39;url2&#39;], &#39;tags&#39;: [{&#39;id&#39;: 1, &#39;name&#39;: &#39;tag1&#39;}, {&#39;id&#39;: 2, &#39;name&#39;: &#39;tag2&#39;}], &#39;status&#39;: &#39;available&#39;}, {&#39;id&#39;: 7, &#39;cat / 958ms)</div>
+    
+    <div>[executor] PASS API-005 GET /pet/findByTags 缺少必填 query tags 应返回 400 (期望 400 / 实际 400 {&#39;code&#39;: 400, &#39;message&#39;: &#39;Input error: missing required query parameter `tags`&#39;} / 985ms)</div>
+    
+    <div>[executor] FAIL API-006 GET /pet/1 查询存在的宠物详情 (期望 200 / 实际 404 Pet not found / 1022ms)</div>
+    
+    <div>[executor] PASS API-007 GET /pet/999999999 不存在的 petId 应返回 404 (期望 404 / 实际 404 Pet not found / 994ms)</div>
+    
+    <div>[executor] PASS API-008 GET /pet/abc 非数字 petId 契约声明 400（int64 类型校验） (期望 400 / 实际 400 {&#39;code&#39;: 400, &#39;message&#39;: &#34;Input error: couldn&#39;t convert `abc` to type `class java.lang.Long`&#34;} / 987ms)</div>
+    
+    <div>[executor] PASS API-009 POST /pet 创建宠物（自建资源，供后续读/删使用） (期望 200 / 实际 200 {&#39;id&#39;: 987654321, &#39;category&#39;: {&#39;id&#39;: 1, &#39;name&#39;: &#39;auto&#39;}, &#39;name&#39;: &#39;auto-test-pet&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [{&#39;id&#39;: 1, &#39;name&#39;: &#39;tag1&#39;}], &#39;status&#39;: &#39;available&#39;} / 966ms)</div>
+    
+    <div>[executor] FAIL API-010 POST /pet 缺少必填 name/photoUrls 应返回 400 或 422 (期望 400 / 实际 200 {&#39;id&#39;: 987654322, &#39;photoUrls&#39;: [], &#39;tags&#39;: [], &#39;status&#39;: &#39;available&#39;} / 967ms)</div>
+    
+    <div>[executor] FAIL API-011 POST /pet 非法 status 枚举值应被拒绝（400/422） (期望 400 / 实际 200 {&#39;id&#39;: 987654323, &#39;name&#39;: &#39;bad-status-pet&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [], &#39;status&#39;: &#39;notastatus&#39;} / 967ms)</div>
+    
+    <div>[executor] PASS API-012 PUT /pet 更新自建宠物名称 (期望 200 / 实际 200 {&#39;id&#39;: 987654321, &#39;name&#39;: &#39;auto-test-pet-updated&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [], &#39;status&#39;: &#39;sold&#39;} / 954ms)</div>
+    
+    <div>[executor] PASS API-013 PUT /pet 更新不存在的 petId 应返回 404 (期望 404 / 实际 404 Pet not found / 965ms)</div>
+    
+    <div>[executor] PASS API-014 POST /pet/987654321 表单更新宠物 name/status (期望 200 / 实际 200 {&#39;id&#39;: 987654321, &#39;name&#39;: &#39;form-updated&#39;, &#39;photoUrls&#39;: [&#39;https://example.com/p.png&#39;], &#39;tags&#39;: [], &#39;status&#39;: &#39;pending&#39;} / 951ms)</div>
+    
+    <div>[executor] PASS API-015 DELETE /pet/987654321 删除自建宠物（清理，不使用契约示例固定 id） (期望 200 / 实际 200 Pet deleted / 1277ms)</div>
+    
+    <div>[executor] PASS API-016 GET /store/inventory 返回按状态分组的库存 (期望 200 / 实际 200 {&#39;approved&#39;: 57, &#39;placed&#39;: 100, &#39;delivered&#39;: 50} / 981ms)</div>
+    
+    <div>[executor] PASS API-017 GET /store/order/1 查询订单（只读，不删除固定 id） (期望 200 / 实际 200 {&#39;id&#39;: 1, &#39;petId&#39;: 1, &#39;quantity&#39;: 100, &#39;shipDate&#39;: &#39;2026-10-25T03:02:26.922+00:00&#39;, &#39;status&#39;: &#39;placed&#39;, &#39;complete&#39;: True} / 991ms)</div>
+    
+    <div>[executor] PASS API-018 GET /store/order/999999999 不存在订单应返回 404 (期望 404 / 实际 404 Order not found / 989ms)</div>
+    
+    <div>[executor] FAIL API-019 GET /user/login 缺少 username/password 应返回 400 (期望 400 / 实际 200 Logged in user session: 7180693170507649666 / 995ms)</div>
+    
+    <div>[executor] PASS API-020 GET /user/unknown_user_xyz 不存在用户应返回 404 (期望 404 / 实际 404 User not found / 947ms)</div>
+    
+    <div>[critic] 失败 4/20，归因出 4 个缺陷</div>
+    
+    <div>[critic]   DEF-001 [high/contract] POST /pet 未做必填字段校验，缺少 name/photoUrls 仍创建成功并返回 200 @ POST /pet</div>
+    
+    <div>[critic]   DEF-002 [high/contract] POST /pet 未校验 status 枚举取值，非法值 notastatus 被接受并持久化 @ POST /pet</div>
+    
+    <div>[critic]   DEF-003 [high/contract] GET /user/login 缺少 username/password 时未返回 400，反而创建了登录会话 @ GET /user/login</div>
+    
+    <div>[critic]   DEF-004 [medium/test_issue] GET /pet/1 查询已存在宠物返回 404，疑似测试数据未预置或被并发用例清理 @ GET /pet/{petId}</div>
+    
+  </div>
+</main>
+</body>
+</html>
