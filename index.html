@@ -1,1 +1,21 @@
-<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=report.html"><a href="report.html">打开测试报告</a>
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>Agent 自动测试报告</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 48px auto; max-width: 760px; color: #1f2328; }
+  h1 { font-size: 22px; }
+  li { margin: 10px 0; line-height: 1.6; }
+  code { background: #f6f8fa; padding: 1px 5px; border-radius: 4px; }
+  .note { color: #57606a; font-size: 13px; }
+</style>
+<h1>Agent 自动测试报告</h1>
+<ul>
+  <li><a href="report.html">本地待办清单服务</a> —— 26 条用例 / 18 通过 / 8 失败 / 5 个缺陷（Brain: llm）</li>
+  <li><a href="petstore/report.html">第三方 Petstore 契约</a> —— 20 条用例 / 16 通过 / 4 失败 / 4 个缺陷（Brain: llm）</li>
+</ul>
+<p class="note">
+  第二份是对<b>公网第三方服务</b>（Swagger 官方 Petstore v3）跑出来的：契约从对方
+  <code>/openapi.json</code> 现取，用例由 LLM 现场生成，我们不控制那台服务器。
+  说明与诚实边界见仓库里的 <code>docs/第三方契约验证.md</code>。
+</p>
