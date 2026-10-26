@@ -53,7 +53,7 @@ coverage==7.16.2
 mypy==2.4.0
 
 # Lint / 格式化（CI lint job + .pre-commit-config.yaml）
-ruff==0.17.1
+ruff==0.17.2
 
 # 依赖漏洞扫描（CI security job；Dependabot 负责版本更新）
 pip-audit==2.10.1
