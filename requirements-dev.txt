@@ -50,10 +50,10 @@ pytest-cov==7.1.0
 coverage==7.16.2
 
 # 静态类型检查（CI lint job）
-mypy==2.4.0
+mypy==2.4.1
 
 # Lint / 格式化（CI lint job + .pre-commit-config.yaml）
-ruff==0.17.1
+ruff==0.17.3
 
 # 依赖漏洞扫描（CI security job；Dependabot 负责版本更新）
 pip-audit==2.10.1
