@@ -87,6 +87,10 @@ exclude = '(^|/)(\.venv|build|dist|reports)/'
 target-version = "py312"
 line-length = 120
 extend-exclude = [".venv", "reports", "build", "dist"]
+# 让显式传进来的文件也遵守排除规则。pre-commit 的 hook 是「把改动的文件名
+# 逐个传给 ruff」，不带这个开关时显式路径会绕过 exclude，于是本机的
+# ruff-format hook 照样会重排 md。CI 走目录扫描，不受影响。
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E4", "E9", "W6", "F63", "F7", "F82", "PGH", "PIE", "RUF100"]
@@ -94,7 +98,19 @@ select = ["E4", "E9", "W6", "F63", "F7", "F82", "PGH", "PIE", "RUF100"]
 #   line-length = 88（ruff 默认）→ 278 处
 #   line-length = 120（下方本仓库配置）→ 18 处
 # 开启会让 CI 一开始就是红的，属于把技术债混进本次交付。
-# 同理不做 `ruff format`：实测 35 个文件会被重排（见 CHANGELOG Unreleased 段）。
+
+[tool.ruff.format]
+# 只格式化 .py，不管 Markdown 里的代码块。
+#
+# 为什么需要这条：ruff 从 0.16.0（2026-07-23）起，`ruff format` 会顺带格式化
+# Markdown 中语言标记为 python/py/python3/pyi/pycon 的围栏代码块
+# （https://astral.sh/blog/ruff-v0.16.0 ）。本仓 CI 的 `ruff format --check .`
+# 是阻塞项，于是「改文档」这个纯写作动作会把整条流水线弄红——文档里的示例代码
+# 是给人读的，常带手工对齐的注释与刻意折行，被 ruff 按代码风格重排后反而更难读。
+# 实测 `docs/零基础入门.md` 单独一个文件就会被改 265 行。
+#
+# 只关 format，不动 lint：`ruff check` 本来就只扫 .py，不受影响。
+exclude = ["*.md"]
 
 [tool.ruff.lint.per-file-ignores]
 # scripts/ 是本仓库自己新加的工程化脚本，比业务代码更容易保持干净
